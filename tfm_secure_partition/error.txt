@@ -1,0 +1,40 @@
+[175/175] Linking C executable zephyr/zephyr.elf
+FAILED: zephyr/zephyr.elf zephyr/zephyr.map zephyr/zephyr.hex zephyr/zephyr.bin zephyr/zephyr.lst zephyr/zephyr.stat zephyr/tfm_s_signed.hex zephyr/zephyr_ns_signed.hex zephyr/tfm_merged.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.map /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.bin /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.lst /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.stat /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_merged.hex
+: && ccache /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc  -gdwarf-4 zephyr/CMakeFiles/zephyr_final.dir/misc/empty_file.c.obj zephyr/CMakeFiles/zephyr_final.dir/isr_tables.c.obj -o zephyr/zephyr.elf  zephyr/CMakeFiles/offsets.dir/./arch/arm/core/offsets/offsets.c.obj  tfm/secure_fw/s_veneers.o  -fuse-ld=bfd  -Wl,-T  zephyr/linker.cmd  -Wl,-Map=/home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_final.map  -Wl,--whole-archive  app/libapp.a  zephyr/libzephyr.a  zephyr/arch/common/libarch__common.a  zephyr/arch/arch/arm/core/aarch32/libarch__arm__core__aarch32.a  zephyr/arch/arch/arm/core/aarch32/cortex_m/libarch__arm__core__aarch32__cortex_m.a  zephyr/arch/arch/arm/core/aarch32/cortex_m/cmse/libarch__arm__core__aarch32__cortex_m__cmse.a  zephyr/arch/arch/arm/core/aarch32/mpu/libarch__arm__core__aarch32__mpu.a  zephyr/lib/libc/minimal/liblib__libc__minimal.a  zephyr/lib/libc/common/liblib__libc__common.a  zephyr/soc/arm/common/cortex_m/libsoc__arm__common__cortex_m.a  zephyr/drivers/interrupt_controller/libdrivers__interrupt_controller.a  zephyr/drivers/clock_control/libdrivers__clock_control.a  zephyr/drivers/console/libdrivers__console.a  zephyr/drivers/gpio/libdrivers__gpio.a  zephyr/drivers/pinctrl/libdrivers__pinctrl.a  zephyr/drivers/reset/libdrivers__reset.a  zephyr/drivers/serial/libdrivers__serial.a  zephyr/drivers/timer/libdrivers__timer.a  modules/stm32/stm32cube/lib..__modules__hal__stm32__stm32cube.a  modules/trusted-firmware-m/libtfm_api.a  -Wl,--no-whole-archive  zephyr/kernel/libkernel.a  -L"/home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/../lib/gcc/arm-zephyr-eabi/12.2.0/thumb/v8-m.main/nofp"  -L/home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr  -lgcc  -Wl,--print-memory-usage  zephyr/arch/common/libisr_tables.a  -mcpu=cortex-m33  -mthumb  -mabi=aapcs  -mfp16-format=ieee  -Wl,--gc-sections  -Wl,--build-id=none  -Wl,--sort-common=descending  -Wl,--sort-section=alignment  -Wl,-u,_OffsetAbsSyms  -Wl,-u,_ConfigAbsSyms  -nostdlib  -static  -Wl,-X  -Wl,-N  -Wl,--orphan-handling=warn  -Wl,-no-pie
+&& cd /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr && /usr/bin/cmake -E copy zephyr_final.map zephyr.map && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objcopy --gap-fill 0xff --output-target=ihex --remove-section=.comment --remove-section=COMMON --remove-section=.eh_frame zephyr.elf zephyr.hex && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objcopy --gap-fill 0xff --output-target=binary --remove-section=.comment --remove-section=COMMON --remove-section=.eh_frame zephyr.elf zephyr.bin && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objdump -d -S zephyr.elf > zephyr.lst && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-readelf -e zephyr.elf > zephyr.stat && /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/postbuild.sh /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc && /usr/bin/cmake -E env PYTHONPATH=/home/da/dev/bachelor/zephyr-blinky/bootloader/mcuboot/scripts /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/scripts/wrapper/wrapper.py --layout /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_ns.dir/signing_layout_ns.o -k /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/root-RSA-3072_1.pem --public-key-format full --align 1 -v 0.0.0+0 --hex-addr=201326592 -s auto --measured-boot-record -H 0x400 /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex && /usr/bin/cmake -E env PYTHONPATH=/home/da/dev/bachelor/zephyr-blinky/bootloader/mcuboot/scripts /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/scripts/wrapper/wrapper.py --layout /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_s.dir/signing_layout_s.o -k /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/root-RSA-3072.pem --public-key-format full --align 1 -v 0.0.0+0 --pad --pad-header -s auto --measured-boot-record -H 0x400 /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bin/tfm_s.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex && /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py -o /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_merged.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bin/bl2.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex
+Memory region         Used Size  Region Size  %age Used
+           FLASH:       18680 B       512 KB      3.56%
+             RAM:        4184 B       192 KB      2.13%
+        IDT_LIST:          0 GB         2 KB      0.00%
+preprocess bl2 file
+ updated
+ updated
+ updated
+ updated
+ updated
+ updated
+ updated
+ updated
+ updated
+ updated
+image.py: sign the payload
+image.py: sign the payload
+Traceback (most recent call last):
+  File "/home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py", line 28, in merge_hex_files
+    ih.merge(to_merge, overlap=overlap)
+  File "/usr/lib/python3.11/site-packages/intelhex/__init__.py", line 875, in merge
+    raise AddressOverlapError(
+intelhex.AddressOverlapError: Data overlapped at address 0xC000000
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py", line 56, in <module>
+    main()
+  File "/home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py", line 52, in main
+    merge_hex_files(args.output, args.input_files, args.overlap)
+  File "/home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py", line 30, in merge_hex_files
+    raise AddressOverlapError("{} has merge issues".format(hex_file_path))
+intelhex.AddressOverlapError: /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex has merge issues
+ninja: build stopped: subcommand failed.
+FATAL ERROR: command exited with status 1: /usr/bin/cmake --build /home/da/dev/bachelor/zephyr-blinky/zephyr/build
