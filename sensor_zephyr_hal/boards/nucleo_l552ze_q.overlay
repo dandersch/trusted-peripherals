@@ -1,0 +1,37 @@
+&i2c1 {
+			compatible = "st,stm32-i2c-v2";
+            status = "okay";
+            /* sda-pin = <26>; */
+            /* scl-pin = <27>; */
+
+            /* pinctrl-0 = <>; */
+            pinctrl-0 = <&i2c1_sda_pb7 &i2c1_scl_pb6>;
+            pinctrl-names = "default";
+};
+
+&i2c2 {
+			compatible = "st,stm32-i2c-v2";
+            status = "okay";
+            /* sda-pin = <26>; */
+            /* scl-pin = <27>; */
+
+            pinctrl-0 = <&i2c2_sda_pf0 &i2c2_scl_pf1>;
+            pinctrl-names = "default";
+};
+
+&i2c2_sda_pf0 {
+            /* /delete-property/ bias-pull-up;     */
+            /* /delete-property/ drive-open-drain; */
+};
+
+&i2c2_scl_pf1 {
+            /* /delete-property/ bias-pull-up;     */
+            /* /delete-property/ drive-open-drain; */
+            /* bias-disable */
+            /* bias-pull-up */
+            /* bias-pull-down */
+            /* drive-push-pull */
+            /* drive-open-drain */
+            /* output-low */
+            /* output-high */
+};
