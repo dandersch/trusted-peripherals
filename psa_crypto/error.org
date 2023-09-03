@@ -1,0 +1,75 @@
+#+BEGIN_SRC shell
+[259/259] Linking C executable zephyr/zephyr.elf
+FAILED: zephyr/zephyr.elf zephyr/zephyr.map zephyr/zephyr.hex zephyr/zephyr.bin zephyr/zephyr.lst zephyr/zephyr.stat zephyr/tfm_s_signed.hex zephyr/zephyr_ns_signed.hex zephyr/tfm_merged.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.map /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.bin /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.lst /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.stat /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_merged.hex
+: && ccache /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc  -gdwarf-4 zephyr/CMakeFiles/zephyr_final.dir/misc/empty_file.c.obj zephyr/CMakeFiles/zephyr_final.dir/isr_tables.c.obj -o zephyr/zephyr.elf  zephyr/CMakeFiles/offsets.dir/./arch/arm/core/offsets/offsets.c.obj  tfm/secure_fw/s_veneers.o  -fuse-ld=bfd  -Wl,-T  zephyr/linker.cmd  -Wl,-Map=/home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_final.map  -Wl,--whole-archive  app/libapp.a  zephyr/libzephyr.a  zephyr/arch/common/libarch__common.a  zephyr/arch/arch/arm/core/aarch32/libarch__arm__core__aarch32.a  zephyr/arch/arch/arm/core/aarch32/cortex_m/libarch__arm__core__aarch32__cortex_m.a  zephyr/arch/arch/arm/core/aarch32/cortex_m/cmse/libarch__arm__core__aarch32__cortex_m__cmse.a  zephyr/arch/arch/arm/core/aarch32/mpu/libarch__arm__core__aarch32__mpu.a  zephyr/lib/libc/newlib/liblib__libc__newlib.a  zephyr/lib/libc/common/liblib__libc__common.a  zephyr/soc/arm/common/cortex_m/libsoc__arm__common__cortex_m.a  zephyr/drivers/interrupt_controller/libdrivers__interrupt_controller.a  zephyr/drivers/clock_control/libdrivers__clock_control.a  zephyr/drivers/console/libdrivers__console.a  zephyr/drivers/gpio/libdrivers__gpio.a  zephyr/drivers/pinctrl/libdrivers__pinctrl.a  zephyr/drivers/reset/libdrivers__reset.a  zephyr/drivers/serial/libdrivers__serial.a  zephyr/drivers/timer/libdrivers__timer.a  modules/stm32/stm32cube/lib..__modules__hal__stm32__stm32cube.a  modules/mbedtls/libmbedTLSBase.a  modules/mbedtls/libmbedTLSCrypto.a  modules/mbedtls/libmbedTLSX509.a  modules/mbedtls/libmodules__mbedtls.a  modules/trusted-firmware-m/libtfm_api.a  -Wl,--no-whole-archive  zephyr/kernel/libkernel.a  -L"/home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/../lib/gcc/arm-zephyr-eabi/12.2.0/thumb/v8-m.main/nofp"  -L/home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr
+ -lgcc  -Wl,--print-memory-usage  zephyr/arch/common/libisr_tables.a  modules/mbedtls/libmbedTLSBase.a  modules/mbedtls/libmbedTLSCrypto.a  modules/trusted-firmware-m/libtfm_api.a  modules/mbedtls/libmbedTLSX509.a  -mcpu=cortex-m33  -mthumb  -mabi=aapcs  -mfp16-format=ieee  -Wl,--gc-sections  -Wl,--build-id=none  -Wl,--sort-common=descending  -Wl,--sort-section=alignment  -Wl,-u,_OffsetAbsSyms  -Wl,-u,_ConfigAbsSyms  -nostdlib  -static  -Wl,-X  -Wl,-N  -Wl,--orphan-handling=warn  -Wl,-no-pie  -lm  -Wl,-lc  -L"/home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/arm-zephyr-eabi"/lib/thumb/v8-m.main/nofp  -Wl,-lgcc  -lc
+&& cd /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr && /usr/bin/cmake -E copy zephyr_final.map zephyr.map && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objcopy --gap-fill 0xff --output-target=ihex --remove-section=.comment --remove-section=COMMON --remove-section=.eh_frame zephyr.elf zephyr.hex && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objcopy --gap-fill 0xff --output-target=binary --remove-section=.comment --remove-section=COMMON --remove-section=.eh_frame zephyr.elf zephyr.bin && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-objdump -d -S zephyr.elf > zephyr.lst && /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-readelf -e zephyr.elf > zephyr.stat && /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/postbuild.sh /home/da/dev/bachelor/zephyr-sdk-0.16.2-rc1/arm-zephyr-eabi/bin/arm-zephyr-eabi-gcc && /usr/bin/cmake -E env PYTHONPATH=/home/da/dev/bachelor/zephyr-blinky/bootloader/mcuboot/scripts /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/scripts/wrapper/wrapper.py --layout /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_ns.dir/signing_layout_ns.o -k /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/root-RSA-3072_1.pem --public-key-format full --align 1 -v 0.0.0+0 --hex-addr=201326592 -s auto --measured-boot-record -H 0x400 /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex && /usr/bin/cmake -E env PYTHONPATH=/home/da/dev/bachelor/zephyr-blinky/bootloader/mcuboot/scripts /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/scripts/wrapper/wrapper.py --layout /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bl2/ext/mcuboot/CMakeFiles/signing_layout_s.dir/signing_layout_s.o -k /home/da/dev/bachelor/zephyr-blinky/modules/tee/tf-m/trusted-firmware-m/bl2/ext/mcuboot/root-RSA-3072.pem --public-key-format full --align 1 -v 0.0.0+0 --pad --pad-header -s auto --measured-boot-record -H 0x400 /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bin/tfm_s.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex && /usr/bin/python3.11 /home/da/dev/bachelor/zephyr-blinky/zephyr/scripts/build/mergehex.py -o /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_merged.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/tfm/bin/bl2.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/tfm_s_signed.hex /home/da/dev/bachelor/zephyr-blinky/zephyr/build/zephyr/zephyr_ns_signed.hex
+Memory region         Used Size  Region Size  %age Used
+           FLASH:       80628 B       512 KB     15.38%
+             RAM:       54152 B       192 KB     27.54%
+        IDT_LIST:          0 GB         2 KB      0.00%
+preprocess bl2 file
+ updated
+Usage: wrapper.py [OPTIONS] INFILE OUTFILE
+Try 'wrapper.py --help' for help.
+
+Error: Image size (0x13e9e) + trailer (0x1b0) exceeds requested size 0x9000
+#+END_SRC
+0x9000 = 36864 Bytes = 36 Kb
+
+- If we grow the ns image partition in the zephyr overlay, we instead get an earlier error: FLASH overflowed by 43576 bytes
+- Error is caused by ns primary image only getting 36 KB of flash memory in the flash_layout.h from TF-M
+
+  #+BEGIN_SRC C
+  /* Flash layout on nucleo_l552ze_q with BL2 (multiple image boot):
+   *
+   * 0x0000_0000 BL2 - MCUBoot (38 KB)
+   * 0x0000_e000 OTP / NV counters area (8 KB)
+   * 0x0001_0000 Secure Storage Area (8 KB)
+   * 0x0001_2000 Internal Trusted Storage Area (8 KB)
+   * 0x0001_4000 Secure image     primary slot (180 KB)
+   * 0x0004_1000 Non-secure image primary slot (36 KB)
+   * 0x0004_a000 Secure image     secondary slot (180 KB)
+   * 0x0007_7000 Non-secure image secondary slot (36 KB)
+   */
+  #+END_SRC
+
+- So the program on the non-secure side simply doesn't fit
+- BUT: The flash_layout.h also defines areas for a flash_layout_test with 172 KB for our non-secure image:
+  #+BEGIN_SRC C
+  /* Flash layout on nucleo_l552ze_q with BL2 (multiple image boot, layout for test):
+   * No Firmware update , ITS, PS in RAM.
+   * 0x0000_0000 BL2 - MCUBoot (38 KB)
+   * 0x0000_e000 OTP / NV counters area  area (8 KB)
+   * 0x0001_0000 Secure Storage Area (8 KB)
+   * 0x0001_2000 Internal Trusted Storage Area (8 KB)
+   * 0x0001_4000 Secure image     primary slot (224 KB)
+   * 0x0004_c000 Non-secure image primary slot (172 KB)
+   * 0x0007_7000 Unused (40K)
+   * The size of a partition. This should be large enough to contain a S or NS
+   * sw binary. Each FLASH_AREA_IMAGE contains two partitions. See Flash layout
+   * above.
+   */
+  #+END_SRC
+
+- TF-M only has these test layouts defined for STM32L5xx boards
+- This test layout is used when the macro FLASH_LAYOUT_FOR_TEST is defined
+- We can force this macro to be set by setting the -DTFM_S_REG_TEST=ON property
+  on TFMs build system with the following in our zephyr app's CMakeLists.txt:
+  #+BEGIN_SRC cmake
+  set_property(TARGET zephyr_property_target
+             APPEND PROPERTY TFM_CMAKE_OPTIONS
+             -DTFM_S_REG_TEST=ON
+  )
+  #+END_SRC
+
+- The application build & flashes and runs now. We do however get following
+  errors on startup:
+
+  #+BEGIN_SRC
+  [00:00:00.218,000] <err> app: Generic error
+  [00:00:00.218,000] <err> app: Function: 'cfg_create_data'
+  [00:00:00.218,000] <err> app: Generic error
+  [00:00:00.218,000] <err> app: Function: 'cfg_load_data'
+  [00:00:00.218,000] <err> app: Error loading/generating app config data in SS.
+  #+END_SRC
