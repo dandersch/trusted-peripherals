@@ -15,75 +15,120 @@
                                 * i2c files if HAL_I2C_MODULE_ENABLED is defined,
                                 * but the files aren't in the hal folder */
 
-/* TODO */
-// TODO return proper psa_status
 #define I2C_SLAVE_ADDR 0x28
-static psa_status_t tfm_tp_hal_init()
+static int hal_ready = 0;
+static I2C_HandleTypeDef i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
+static psa_status_t tfm_tp_sensor_data_get(void* handle)
 {
-    HAL_Init();
-    //uint32_t tick = HAL_GetTick();
+    float temp;
+    float humidity;
 
-    /* i2c init */
-    I2C_HandleTypeDef  i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
-    HAL_I2C_MspInit(&i2c2_h);
-    /* (#)Initialize the I2C low level resources by implementing the HAL_I2C_MspInit() API:
-        (##) Enable the I2Cx interface clock
-        (##) I2C pins configuration
-            (+++) Enable the clock for the I2C GPIOs
-            (+++) Configure I2C pins as alternate function open-drain
-    */
+    if (!hal_ready)
+    {
+        HAL_Init();
 
-    /* (#) Configure the Communication Clock Timing, Own Address1, Master
-     * Addressing mode, Dual Addressing mode, Own Address2, Own Address2 Mask,
-     * General call and Nostretch mode in the hi2c Init structure. */
+        /* gpio init */
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+        GPIO_InitStruct.Pin   = GPIO_PIN_7; /* blue led */
+        GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull  = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    i2c2_h.Instance              = I2C2; /* TODO check in stm32l552xx.h if I2C2 is defined as I2C2_S (secure) or I2C2_NS */
-    //i2c2_h.Instance              = I2C2_BASE_NS;
-    //i2c2_h.Instance              = I2C2_BASE_S;
-    //i2c2_h.ClockSpeed            = 100000;
-    i2c2_h.Init.Timing           = 100000; // TODO get right timing
-    //i2c2_h.Init.DutyCycle        = I2C_DUTYCYCLE_2;
-    i2c2_h.Init.OwnAddress1      = 0;
-    i2c2_h.Init.AddressingMode   = I2C_ADDRESSINGMODE_7BIT;
-    i2c2_h.Init.DualAddressMode  = I2C_DUALADDRESS_DISABLE;
-    i2c2_h.Init.OwnAddress2      = 0;
-    i2c2_h.Init.GeneralCallMode  = I2C_GENERALCALL_DISABLE;
-    i2c2_h.Init.NoStretchMode    = I2C_NOSTRETCH_DISABLE;
+        GPIO_InitStruct.Pin = GPIO_PIN_9; /* red led */
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /* (#) Initialize the I2C registers by calling the HAL_I2C_Init(),
-     * configures also the low level Hardware (GPIO, CLOCK, NVIC...etc) by calling
-     * the customized HAL_I2C_MspInit(&hi2c) API. */
-    if (HAL_I2C_Init(&i2c2_h) != HAL_OK) { printf("i2c init failed\n"); }
+        /* i2c init */
+        HAL_I2C_MspInit(&i2c2_h);
+        i2c2_h.Instance              = I2C2; /* TODO check in stm32l552xx.h if I2C2 is I2C2_S (secure) or I2C2_NS */
+        i2c2_h.Init.Timing           = 0x40505681;
+        i2c2_h.Init.OwnAddress1      = 0;
+        i2c2_h.Init.AddressingMode   = I2C_ADDRESSINGMODE_7BIT;
+        i2c2_h.Init.DualAddressMode  = I2C_DUALADDRESS_DISABLE;
+        i2c2_h.Init.OwnAddress2      = 0;
+        i2c2_h.Init.GeneralCallMode  = I2C_GENERALCALL_DISABLE;
+        i2c2_h.Init.NoStretchMode    = I2C_NOSTRETCH_DISABLE;
 
-    /* (#) To check if target device is ready for communication, use the function HAL_I2C_IsDeviceReady() */
-    HAL_StatusTypeDef i2c_ready = HAL_I2C_IsDeviceReady(&i2c2_h, 0x50, 5, 1000);
-    printf("I2C STATUS: %i\n", i2c_ready);
+        if (HAL_I2C_Init(&i2c2_h) != HAL_OK)
+        {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+            printf("i2c init failed\n"); /* NOTE no working printf in secure code, so we set the led too */
+            return PSA_ERROR_GENERIC_ERROR;
+        }
+
+        HAL_StatusTypeDef i2c_fail   = HAL_I2C_IsDeviceReady(&i2c2_h, 0x50, 100, HAL_MAX_DELAY);
+        if (i2c_fail)
+        {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+            printf("I2C NOT READY, STATUS: %i\n", i2c_fail);
+            return PSA_ERROR_GENERIC_ERROR;
+        }
+
+        hal_ready = 1;
+    }
 
     /* send measuring request */
     uint8_t msg[1] = {0};
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(&i2c2_h, 0x50, msg, 0, 1000); // Sending in Blocking mode
+    if (ret) { printf("Sending MR command at slave address failed!\n"); }
 
-    //HAL_GPIO_TogglePin (GPIOB, GPIO_PIN_7); /* toggle blue led */
     HAL_Delay(100);
+
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7); // toggle blue led for every cycle
+
+    /* sensor data fetch (DF) command */
+    {
+        uint8_t data[4];
+        HAL_StatusTypeDef err = HAL_I2C_Master_Receive(&i2c2_h, 0x50, (uint8_t*) &data, 4, 1000);
+        if (err) { printf("Reading from slave address failed!\n"); }
+
+        // 2 most significant bits of the first byte contain status information, the
+        // bit at 0x40 being the stalebit (if set, there is no new data yet)
+        uint8_t stale_bit = (data[0] & 0x40) >> 6;
+        if (stale_bit) {
+            printf("Data is not ready yet\n");
+        } else {
+            // 14 bits raw temperature in byte 3 & 4, read from left to right
+            uint32_t raw_value_temp = ((data[2] << 8) | data[3]) >> 2;
+
+            // 14 bits raw humidity in byte 1 & 2, read right from left and delete status bits from first byte
+            uint32_t raw_value_humid = ((data[0] & 0x3F) << 8) | data[1];
+
+            if (raw_value_temp < 0x3FFF && raw_value_humid < 0x3FFF) {
+                temp     = ((float)(raw_value_temp) * 165.0F / 16383.0F) - 40.0F; // 14 bits, -40°C - +125°C
+                humidity = (float)raw_value_humid * 100.0F / 16383.0F; // 14 bits, 0% - 100%
+
+            } else {
+                printf("Error converting raw data to normal values.\n");
+            }
+        }
+    }
+
+    psa_write((psa_handle_t)handle, 0, &temp, sizeof(temp));
+    psa_write((psa_handle_t)handle, 1, &humidity, sizeof(humidity));
 
     return PSA_SUCCESS;
 }
 
-static psa_status_t tfm_tp_hal_init_ipc(psa_msg_t *msg)
+static psa_status_t tfm_tp_sensor_data_get_ipc(psa_msg_t *msg)
 {
-#if 0
     /* CHECK INPUT */
-    uint32_t first_argument;
+    // NOTE our function only has output parameters right now
+#if 0
+    float* first_argument;
     /* The size of the first argument is incorrect */
-    if (msg->in_size[0] != sizeof(first_argument)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+    if (msg->out_size[0] != sizeof(first_argument)) { return PSA_ERROR_PROGRAMMER_ERROR; }
 
     /* get & set value of first argument */
     size_t ret = 0;
-    ret = psa_read(msg->handle, 0, &first_argument, msg->in_size[0]); /* should return number of bytes copied */
+    ret = psa_read(msg->handle, 0, &first_argument, msg->out_size[0]); /* should return number of bytes copied */
     if (ret != msg->in_size[0]) { return PSA_ERROR_PROGRAMMER_ERROR; }
 #endif
 
-    return tfm_tp_hal_init();
+    return tfm_tp_sensor_data_get((void*) msg->handle);
 }
 
 typedef psa_status_t (*tp_func_t)(psa_msg_t *);
@@ -116,8 +161,8 @@ psa_status_t tfm_tp_req_mngr_init(void)
     while (1) {
         signals = psa_wait(PSA_WAIT_ANY, PSA_BLOCK);
 
-        if (signals & TFM_TP_HAL_INIT_SIGNAL) {
-            tp_signal_handle(TFM_TP_HAL_INIT_SIGNAL, tfm_tp_hal_init_ipc);
+        if (signals & TFM_TP_SENSOR_DATA_GET_SIGNAL) {
+            tp_signal_handle(TFM_TP_SENSOR_DATA_GET_SIGNAL, tfm_tp_sensor_data_get_ipc);
         }
 
         /*
