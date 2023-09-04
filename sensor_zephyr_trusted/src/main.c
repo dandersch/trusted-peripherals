@@ -20,9 +20,10 @@ int main(void)
 
         float sensor_temperature = 0.0f;
         float sensor_humidity    = 0.0f;
+        uint8_t* mac = NULL;
 
         /* i2c code in secure code */
-        psa_status_t ret = tp_sensor_data_get(&sensor_temperature, &sensor_humidity);
+        psa_status_t ret = tp_sensor_data_get(&sensor_temperature, &sensor_humidity, mac);
         if (ret != PSA_SUCCESS) {
             printk("Getting sensor data failed with status: %i\n", ret);
         }

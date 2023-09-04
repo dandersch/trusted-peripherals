@@ -110,6 +110,23 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
     psa_write((psa_handle_t)handle, 0, &temp, sizeof(temp));
     psa_write((psa_handle_t)handle, 1, &humidity, sizeof(humidity));
 
+    /* Test psa_crypto functions */
+    // psa_sign_message(key, alg, input, ...)` is equivalent to
+    // psa_verify_message()
+    //tfm_crypto_hash_interface(psa_invec in_vec[], psa_outvec out_vec[]);
+    // uint8_t* mac
+    // status = crp_hash_payload(msg, strlen(msg), hash, sizeof(hash), &hash_len);
+    //
+    // /* Sign the hash using key #1. */
+    // status = crp_sign_hash(1, hash, hash_len, sig, sizeof(sig), &sig_len);
+    //
+    // /* Verify the hash signature using the public key. */
+    // status = crp_verify_sign(1, hash, hash_len, sig, sig_len);
+
+    //psa_invec  hash_input  = {.base = NULL, .len = 0};
+    //psa_outvec hash_output = {.base = NULL, .len = 0};
+    //tfm_crypto_hash_interface(hash_input, hash_output);
+
     return PSA_SUCCESS;
 }
 

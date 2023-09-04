@@ -7,15 +7,16 @@
 #include "psa_manifest/sid.h"
 #endif
 
-psa_status_t tp_sensor_data_get(float* temp, float* humidity)
+psa_status_t tp_sensor_data_get(float* temp, float* humidity, uint8_t* mac)
 {
     psa_status_t status;
     psa_handle_t handle;
 
     psa_invec  in_vec[]  = { { .base = NULL, .len = 0 } }; // input parameter
     psa_outvec out_vec[] = {
-        { .base = temp,     .len = sizeof(float*) },
-        { .base = humidity, .len = sizeof(float*) },
+        { .base = temp,     .len = sizeof(temp)   },
+        { .base = humidity, .len = sizeof(humidity)   },
+        // { .base = mac,      .len = sizeof(mac)   }, // causes psa error
     }; // output parameter
 
 #if defined(CONFIG_TFM_IPC)
