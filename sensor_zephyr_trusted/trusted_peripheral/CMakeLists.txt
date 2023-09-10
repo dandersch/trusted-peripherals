@@ -5,15 +5,23 @@ target_include_directories(tfm_app_rot_partition_tp
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     PRIVATE
         ${CMAKE_BINARY_DIR}/trusted_peripheral
+        ../src/oled_driver
+        ../src/oled_driver/Config
+        ../src/oled_driver/OLED
+        ../src/oled_driver/GUI
+        ../src/oled_driver/Example
 )
 target_include_directories(tfm_partitions
     INTERFACE
         ${CMAKE_BINARY_DIR}/trusted_peripheral
 )
 
+file(GLOB_RECURSE oled_driver_sources CONFIGURE_DEPENDS ../src/oled_driver/*.c)
+
 target_sources(tfm_app_rot_partition_tp
     PRIVATE
         trusted_peripheral.c
+        ${oled_driver_sources}
 )
 
 # The generated sources

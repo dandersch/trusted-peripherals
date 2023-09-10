@@ -5,19 +5,42 @@
 #include "psa/service.h"
 #include "psa_manifest/tfm_trusted_peripheral.h"
 
+/* PINS in USE:
+**
+** PA9 - red led
+** PB7 - blue led
+**
+** PF0 - I2C2_SDA
+** PF1 - I2C2_SCL
+**
+** PG0 - OLED_RST
+** PG1 - OLED_DC
+** PA4 - SPI1_CS
+** PB3 - SPI1_SCK
+** PB5 - SPI1_MOSI
+*/
+
 /* NOTE ours */
 #include <stdio.h> // TODO does this make tf-m include libc?
-#define HAL_I2C_MODULE_ENABLED // TODO only worked after adding this at the start of  "stm32l5xx_hal_i2c.c"
 #include "stm32hal.h"
 #include "stm32l5xx_hal_i2c.h" /* NOTE we pasted the files for I2C module ourselves
-                                * into the tf-m folders and added them to the CMakeLists.txt.
-                                * TF-M has code that is supposed to include the
-                                * i2c files if HAL_I2C_MODULE_ENABLED is defined,
-                                * but the files aren't in the hal folder */
+                                * into the tf-m folders and added them to the
+                                * CMakeLists.txt.  TF-M comes with the stm32 hal
+                                * library, but not i2c or spi related stuff */
+#include "stm32l5xx_hal_spi.h" /* same as above */
+static int hal_ready = 0;
 
 #define I2C_SLAVE_ADDR 0x28
-static int hal_ready = 0;
 static I2C_HandleTypeDef i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
+
+/* SPI display */
+SPI_HandleTypeDef hspi1;
+uint8_t black_image[1024]; // for oled test
+uint8_t our_image[1024];
+#include "OLED_0in96.h"
+#include "main.h" // NOTE if we change SPI pins we have to change this file
+#include "test.h"
+
 /* TODO duplicated on non-secure side */
 #define MAC_HASH_SIZE 256 /* NOTE in bytes, TODO get correct one with PSA_HASH_LENGTH(alg) or use
                            * PSA_MAC_MAX_SIZE
@@ -30,8 +53,6 @@ static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t k
 static psa_status_t tfm_tp_sensor_data_get(void* handle)
 {
     float temp_and_humidity[2];
-    //float temp;
-    //float humidity;
     tp_mac_t mac;
 
     if (!hal_ready)
@@ -51,6 +72,81 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
         HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+        /* spi init */
+        hspi1.Instance               = SPI1;
+        hspi1.Init.Mode              = SPI_MODE_MASTER;
+        hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
+        hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
+        hspi1.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+        hspi1.Init.CLKPhase          = SPI_PHASE_2EDGE;
+        hspi1.Init.NSS               = SPI_NSS_SOFT;
+        hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+        hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+        hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
+        hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+        hspi1.Init.CRCPolynomial     = 10;
+        //hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
+        //hspi1.Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
+        if (HAL_SPI_Init(&hspi1) != HAL_OK)
+        {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+            printf("spi init failed\n");
+            return -1;
+        }
+        __HAL_RCC_SPI1_CLK_ENABLE();
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+        __HAL_RCC_GPIOC_CLK_ENABLE();
+        __HAL_RCC_GPIOG_CLK_ENABLE();
+
+        GPIO_InitTypeDef GPIO_SPI_InitStruct = {0};
+        GPIO_SPI_InitStruct.Pin       = GPIO_PIN_3 | // PB3 -> SPI1_SCK
+                                        GPIO_PIN_5;  // PB5 -> SPI1_MOSI
+        GPIO_SPI_InitStruct.Mode      = GPIO_MODE_AF_PP; // alternate function push pull
+        GPIO_SPI_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_SPI_InitStruct.Alternate = GPIO_AF5_SPI1;
+        HAL_GPIO_Init(GPIOB, &GPIO_SPI_InitStruct);
+
+        HAL_GPIO_WritePin(GPIOG, OLED_DC_Pin|OLED_RST_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET);
+
+        /* set dc rst pin */
+        GPIO_InitStruct.Pin   = OLED_DC_Pin|OLED_RST_Pin;
+        GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull  = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+        /* set spi_cs pin */
+        GPIO_InitStruct.Pin       = OLED_CS_Pin;
+        GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull      = GPIO_NOPULL;
+        GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
+
+        HAL_SPI_StateTypeDef spi_state = HAL_SPI_GetState(&hspi1);
+        uint32_t spi_error             = HAL_SPI_GetError(&hspi1); // HAL_SPI_ERROR_NONE
+        if (spi_state != HAL_SPI_STATE_READY || spi_error != HAL_SPI_ERROR_NONE)
+        {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+            printf("SPI NOT READY, STATUS: %i, ERROR: %i\n", spi_state, spi_error);
+            return spi_error;
+        }
+
+        /* LED code */
+        {
+            //OLED_0in96_test(); // demo with a while(1) loop
+
+            OLED_0in96_Init();
+            Driver_Delay_ms(500);
+
+            Paint_NewImage(our_image, OLED_0in96_WIDTH, OLED_0in96_HEIGHT, 90, BLACK);
+            Paint_SelectImage(our_image);
+            Driver_Delay_ms(500);
+            Paint_Clear(BLACK);
+        }
 
         /* i2c init */
         HAL_I2C_MspInit(&i2c2_h);
@@ -116,6 +212,20 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
                 printf("Error converting raw data to normal values.\n");
             }
         }
+    }
+
+    /* update oled display */
+    {
+        Paint_DrawString_EN(10, 0,  "SENSOR",   &Font16, WHITE, WHITE);
+        Paint_DrawString_EN(10, 20,  "Temp.",   &Font12, WHITE, WHITE);
+        Paint_DrawNum(60, 20, temp_and_humidity[0], &Font12,  4, WHITE, WHITE);
+        Paint_DrawString_EN(10, 40, "Humid.", &Font12,  WHITE, WHITE);
+        Paint_DrawNum(60, 40, temp_and_humidity[1], &Font12, 5, WHITE, WHITE);
+
+        /* needs to at the end */
+        OLED_0in96_display(our_image);
+        Driver_Delay_ms(2000);
+        Paint_Clear(BLACK);
     }
 
     psa_write((psa_handle_t)handle, 0, &temp_and_humidity[0], sizeof(&temp_and_humidity[0]));
