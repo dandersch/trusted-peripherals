@@ -1,0 +1,3 @@
+This is the driver code for the WaveShare 0.96inch OLED display from the
+waveshare.com (permissive license). I ported it to the STM32L552ZE-Q board with
+different pin configuration (used to be STM32-F103RBT6).

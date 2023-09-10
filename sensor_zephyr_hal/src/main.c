@@ -3,13 +3,37 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 
+/* PINS in USE:
+**
+** PA9 - red led
+** PB7 - blue led
+**
+** PF0 - I2C2_SDA
+** PF1 - I2C2_SCL
+**
+** PG0 - OLED_RST
+** PG1 - OLED_DC
+** PA4 - SPI1_CS
+** PB3 - SPI1_SCK
+** PB5 - SPI1_MOSI
+*/
+
 /* STM32 HAL */
 #include <soc.h>
 #include <stm32_ll_i2c.h>
+static int hal_ready = 0;
 
+/* I2C peripheral */
 static I2C_HandleTypeDef  i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
 #define I2C_SLAVE_ADDR 0x28 /* TODO why does zephyr use 0x28, but the HAL version expects 0x50 */
-static int hal_ready = 0;
+
+/* SPI display */
+SPI_HandleTypeDef hspi1;
+uint8_t black_image[1024]; // for oled test
+uint8_t our_image[1024];
+#include "OLED_0in96.h"
+#include "main.h" // NOTE if we change SPI pins we have to change this file
+#include "test.h"
 
 int tp_sensor_data_get(float* temp, float* humidity)
 {
@@ -31,6 +55,80 @@ int tp_sensor_data_get(float* temp, float* humidity)
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        /* spi init */
+        hspi1.Instance               = SPI1;
+        hspi1.Init.Mode              = SPI_MODE_MASTER;
+        hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
+        hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
+        hspi1.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+        hspi1.Init.CLKPhase          = SPI_PHASE_2EDGE;
+        hspi1.Init.NSS               = SPI_NSS_SOFT;
+        hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+        hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+        hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
+        hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+        hspi1.Init.CRCPolynomial     = 10;
+        //hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
+        //hspi1.Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
+        if (HAL_SPI_Init(&hspi1) != HAL_OK)
+        {
+            printk("spi init failed\n");
+            return -1;
+        }
+        __HAL_RCC_SPI1_CLK_ENABLE();
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        __HAL_RCC_GPIOB_CLK_ENABLE();
+        __HAL_RCC_GPIOC_CLK_ENABLE();
+        __HAL_RCC_GPIOG_CLK_ENABLE();
+
+        GPIO_InitTypeDef GPIO_SPI_InitStruct = {0};
+        GPIO_SPI_InitStruct.Pin       = GPIO_PIN_3 | // PB3 -> SPI1_SCK
+                                        GPIO_PIN_5;  // PB5 -> SPI1_MOSI
+        GPIO_SPI_InitStruct.Mode      = GPIO_MODE_AF_PP; // alternate function push pull
+        GPIO_SPI_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+        GPIO_SPI_InitStruct.Alternate = GPIO_AF5_SPI1;
+        HAL_GPIO_Init(GPIOB, &GPIO_SPI_InitStruct);
+
+        HAL_GPIO_WritePin(GPIOG, OLED_DC_Pin|OLED_RST_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET);
+
+        /* set dc rst pin */
+        GPIO_InitStruct.Pin   = OLED_DC_Pin|OLED_RST_Pin;
+        GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull  = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+        /* set spi_cs pin */
+        GPIO_InitStruct.Pin       = OLED_CS_Pin;
+        GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull      = GPIO_NOPULL;
+        GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
+
+        HAL_SPI_StateTypeDef spi_state = HAL_SPI_GetState(&hspi1);
+        uint32_t spi_error             = HAL_SPI_GetError(&hspi1); // HAL_SPI_ERROR_NONE
+        if (spi_state != HAL_SPI_STATE_READY || spi_error != HAL_SPI_ERROR_NONE)
+        {
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+            printk("SPI NOT READY, STATUS: %i, ERROR: %i\n", spi_state, spi_error);
+            return spi_error;
+        }
+
+        /* LED code */
+        {
+            //OLED_0in96_test(); // demo with a while(1) loop
+
+            OLED_0in96_Init();
+            Driver_Delay_ms(500);
+
+            Paint_NewImage(our_image, OLED_0in96_WIDTH, OLED_0in96_HEIGHT, 90, BLACK);
+            Paint_SelectImage(our_image);
+            Driver_Delay_ms(500);
+            Paint_Clear(BLACK);
+        }
 
         /* i2c init */
         HAL_I2C_MspInit(&i2c2_h);
@@ -59,6 +157,7 @@ int tp_sensor_data_get(float* temp, float* humidity)
             return -1;
         }
 
+        printk("Successfully initialized HAL\n");
         hal_ready = 1;
     }
 
@@ -68,7 +167,6 @@ int tp_sensor_data_get(float* temp, float* humidity)
     if (ret) { printk("Sending MR command at slave address failed!\n"); }
     HAL_Delay(100);
 
-    //gpio_pin_toggle_dt(&led);
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7); // toggle blue led for every cycle
 
     /* sensor data fetch (DF) command */
@@ -100,6 +198,20 @@ int tp_sensor_data_get(float* temp, float* humidity)
 
     }
 
+    /* update oled display */
+    {
+        Paint_DrawString_EN(10, 0,  "SENSOR",   &Font16, WHITE, WHITE);
+        Paint_DrawString_EN(10, 20,  "Temp.",   &Font12, WHITE, WHITE);
+        Paint_DrawNum(60, 20, *temp, &Font12,  4, WHITE, WHITE);
+        Paint_DrawString_EN(10, 40, "Humid.", &Font12,  WHITE, WHITE);
+        Paint_DrawNum(60, 40, *humidity, &Font12, 5, WHITE, WHITE);
+
+        /* needs to at the end */
+        OLED_0in96_display(our_image);
+        Driver_Delay_ms(2000);
+        Paint_Clear(BLACK);
+    }
+
     /* prepare for trusted delivery */
     {
         /* hash the data */
@@ -125,10 +237,10 @@ int main(void)
         if (ret) { printk("Getting sensor data failed with status: %i\n", ret);}
 
         uint32_t tick_end = HAL_GetTick();
-        printk("(%u ms) ", tick_end - tick_begin);
 
-        printk("Temp: %f ", sensor_temperature);
-        printk("Humidity: %f\n", sensor_humidity);
+        //printk("(%u ms) ", tick_end - tick_begin);
+        //printk("Temp: %f ", sensor_temperature);
+        //printk("Humidity: %f\n", sensor_humidity);
     }
 
     return 0;

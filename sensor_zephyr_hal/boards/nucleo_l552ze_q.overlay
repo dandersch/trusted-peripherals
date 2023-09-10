@@ -1,3 +1,8 @@
+&spi1 {
+    /* pinctrl-0 = < &spi1_nss_pa4 &spi1_sck_pa5 &spi1_miso_pa6 &spi1_mosi_pa7 >; */
+	pinctrl-0 = < &spi1_nss_pa4 &spi1_sck_pb3 &spi1_miso_pb4 &spi1_mosi_pb5 >;
+};
+
 &i2c1 {
 			compatible = "st,stm32-i2c-v2";
             status = "okay";
