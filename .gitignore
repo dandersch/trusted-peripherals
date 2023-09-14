@@ -1,2 +1,4 @@
 build
+build_trusted
+build_untrusted
 .cache

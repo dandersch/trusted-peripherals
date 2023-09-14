@@ -1,6 +1,10 @@
-#include <tfm_ns_interface.h>
+#include "trusted_peripheral.h"
 
-#include "trusted_peripheral_ns.h"
+/*
+** Implements the tp_api to pass execution over to the secure side over an IPC mechanism
+*/
+
+#include <tfm_ns_interface.h>
 
 #if defined(CONFIG_TFM_IPC)
 #include "psa/client.h"

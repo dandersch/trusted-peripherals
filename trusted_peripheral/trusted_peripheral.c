@@ -1,9 +1,35 @@
-#include <psa/crypto.h>
 #include <stdint.h>
-#include "tfm_api.h"
 
-#include "psa/service.h"
-#include "psa_manifest/tfm_trusted_peripheral.h"
+#ifdef UNTRUSTED
+    #include "trusted_peripheral.h"
+
+    /* STM32 HAL */
+    #include <soc.h>
+    #include <stm32_ll_i2c.h>
+#else
+    #include <psa/crypto.h>
+    #include "psa/service.h"
+    #include "psa_manifest/tfm_trusted_peripheral.h"
+    #include "tfm_api.h"
+
+    /* NOTE ours */
+    #include <stdio.h> // TODO does this make tf-m include libc?
+    #include "stm32hal.h"
+    #include "stm32l5xx_hal_i2c.h" /* NOTE we pasted the files for I2C module ourselves
+                                    * into the tf-m folders and added them to the
+                                    * CMakeLists.txt.  TF-M comes with the stm32 hal
+                                    * library, but not i2c or spi related stuff */
+    #include "stm32l5xx_hal_spi.h" /* same as above */
+
+    /* TODO duplicated on non-secure side */
+    #define MAC_HASH_SIZE 256 /* NOTE in bytes, TODO get correct one with PSA_HASH_LENGTH(alg) or use
+                               * PSA_MAC_MAX_SIZE
+                               * PSA_HASH_MAX_SIZE
+                               */
+    typedef struct {
+        uint8_t buf[MAC_HASH_SIZE];  /* lets assume our data packet fits into this buffer */
+    } tp_mac_t;
+#endif
 
 /* PINS in USE:
 **
@@ -20,17 +46,10 @@
 ** PB5 - SPI1_MOSI
 */
 
-/* NOTE ours */
-#include <stdio.h> // TODO does this make tf-m include libc?
-#include "stm32hal.h"
-#include "stm32l5xx_hal_i2c.h" /* NOTE we pasted the files for I2C module ourselves
-                                * into the tf-m folders and added them to the
-                                * CMakeLists.txt.  TF-M comes with the stm32 hal
-                                * library, but not i2c or spi related stuff */
-#include "stm32l5xx_hal_spi.h" /* same as above */
 static int hal_ready = 0;
 
-#define I2C_SLAVE_ADDR 0x28
+/* I2C peripheral */
+#define I2C_SLAVE_ADDR 0x28 /* TODO why does zephyr use 0x28, but the HAL version expects 0x50 */
 static I2C_HandleTypeDef i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
 
 /* SPI display */
@@ -41,19 +60,22 @@ uint8_t our_image[1024];
 #include "main.h" // NOTE if we change SPI pins we have to change this file
 #include "test.h"
 
-/* TODO duplicated on non-secure side */
-#define MAC_HASH_SIZE 256 /* NOTE in bytes, TODO get correct one with PSA_HASH_LENGTH(alg) or use
-                           * PSA_MAC_MAX_SIZE
-                           * PSA_HASH_MAX_SIZE
-                           */
-typedef struct {
-    uint8_t buf[MAC_HASH_SIZE];  /* lets assume our data packet fits into this buffer */
-} tp_mac_t;
+#ifdef TRUSTED
 static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t key_usage, uint8_t *key_data);
+#endif
+
+#ifdef UNTRUSTED
+psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t mac_size)
+#else
 static psa_status_t tfm_tp_sensor_data_get(void* handle)
+#endif
 {
-    float temp_and_humidity[2];
+#ifdef TRUSTED
+    float buffer[2];
+    float* temp     = &buffer[0];
+    float* humidity = &buffer[1];
     tp_mac_t mac;
+#endif
 
     if (!hal_ready)
     {
@@ -163,7 +185,7 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
         {
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
             printf("i2c init failed\n"); /* NOTE no working printf in secure code, so we set the led too */
-            return PSA_ERROR_GENERIC_ERROR;
+            return -132; // PSA_ERROR_GENERIC_ERROR;
         }
 
         HAL_StatusTypeDef i2c_fail   = HAL_I2C_IsDeviceReady(&i2c2_h, 0x50, 100, HAL_MAX_DELAY);
@@ -171,17 +193,16 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
         {
             HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
             printf("I2C NOT READY, STATUS: %i\n", i2c_fail);
-            return PSA_ERROR_GENERIC_ERROR;
+            return -132; // PSA_ERROR_GENERIC_ERROR;
         }
 
         hal_ready = 1;
     }
 
-    /* send measuring request */
+    /* measuring request (MR) command to sensor */
     uint8_t msg[1] = {0};
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(&i2c2_h, 0x50, msg, 0, 1000); // Sending in Blocking mode
     if (ret) { printf("Sending MR command at slave address failed!\n"); }
-
     HAL_Delay(100);
 
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7); // toggle blue led for every cycle
@@ -205,8 +226,8 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
             uint32_t raw_value_humid = ((data[0] & 0x3F) << 8) | data[1];
 
             if (raw_value_temp < 0x3FFF && raw_value_humid < 0x3FFF) {
-                temp_and_humidity[0]     = ((float)(raw_value_temp) * 165.0F / 16383.0F) - 40.0F; // 14 bits, -40°C - +125°C
-                temp_and_humidity[1] = (float)raw_value_humid * 100.0F / 16383.0F; // 14 bits, 0% - 100%
+                *temp     = ((float)(raw_value_temp) * 165.0F / 16383.0F) - 40.0F; // 14 bits, -40°C - +125°C
+                *humidity = (float)raw_value_humid * 100.0F / 16383.0F; // 14 bits, 0% - 100%
 
             } else {
                 printf("Error converting raw data to normal values.\n");
@@ -218,9 +239,9 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
     {
         Paint_DrawString_EN(10, 0,  "SENSOR",   &Font16, WHITE, WHITE);
         Paint_DrawString_EN(10, 20,  "Temp.",   &Font12, WHITE, WHITE);
-        Paint_DrawNum(60, 20, temp_and_humidity[0], &Font12,  4, WHITE, WHITE);
+        Paint_DrawNum(60, 20, *temp, &Font12,  4, WHITE, WHITE);
         Paint_DrawString_EN(10, 40, "Humid.", &Font12,  WHITE, WHITE);
-        Paint_DrawNum(60, 40, temp_and_humidity[1], &Font12, 5, WHITE, WHITE);
+        Paint_DrawNum(60, 40, *humidity, &Font12, 5, WHITE, WHITE);
 
         /* needs to at the end */
         OLED_0in96_display(our_image);
@@ -228,9 +249,12 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
         Paint_Clear(BLACK);
     }
 
-    psa_write((psa_handle_t)handle, 0, &temp_and_humidity[0], sizeof(&temp_and_humidity[0]));
-    psa_write((psa_handle_t)handle, 1, &temp_and_humidity[1], sizeof(&temp_and_humidity[1]));
+#ifdef TRUSTED
+    psa_write((psa_handle_t)handle, 0, temp, sizeof(*temp));
+    psa_write((psa_handle_t)handle, 1, humidity, sizeof(*humidity));
+#endif
 
+#if 0
     /* hash & sign data */
     if (0) {
         /* NOTE static private key for testing */
@@ -291,11 +315,12 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
 
         psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
     }
+#endif
 
-
-    return PSA_SUCCESS;
+    return 0; // PSA_SUCCESS
 }
 
+#ifdef TRUSTED
 static psa_status_t tfm_tp_sensor_data_get_ipc(psa_msg_t *msg)
 {
     /* CHECK INPUT */
@@ -452,3 +477,4 @@ static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t k
     return status;
 
 }
+#endif
