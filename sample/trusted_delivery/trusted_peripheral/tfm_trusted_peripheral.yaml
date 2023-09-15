@@ -3,8 +3,9 @@
   "name": "TFM_SP_TP",
   "type": "APPLICATION-ROT",
   "priority": "NORMAL",
-  "model": "IPC",
-  "entry_point": "tfm_tp_req_mngr_init",
+  "model": "SFN",
+  #"model": "IPC",
+  #"entry_point": "tfm_tp_req_mngr_init", # only for IPC
   "stack_size": "0x800",
 
   # Service definitions for IPC model.
@@ -14,10 +15,12 @@
       "name": "TFM_TP_SENSOR_DATA_GET",
       "sid": "0xFFFFF001",
       "non_secure_clients": true,
-      "connection_based": true,   # requires TFM_CONNECTION_BASED_SERVICE_API to be enabled
+      #"connection_based": true,   # requires TFM_CONNECTION_BASED_SERVICE_API to be enabled
+      "connection_based": false,   # requires TFM_CONNECTION_BASED_SERVICE_API to be enabled
       "version": 1,
       "version_policy": "STRICT",
     },
+    # How you would add another service
     # {
     #   "name": "TFM_TP_SERVICE_TWO",
     #   "sid": "0xFFFFF002",
@@ -27,6 +30,17 @@
     #   "version_policy": "STRICT",
     # },
   ],
+
+  # Apparently this is outdated:
+  #"secure_functions": [
+  #  {
+  #    "name": "TFM_SFN_TP_SENSOR_DATA_GET",
+  #    "signal": "TFM_SFN_TP_SENSOR_DATA_GET",
+  #    "non_secure_clients": true,
+  #    "minor_version": 1,
+  #    "minor_policy": "STRICT"
+  #  },
+  #],
 
   "dependencies": [
     "TFM_CRYPTO",

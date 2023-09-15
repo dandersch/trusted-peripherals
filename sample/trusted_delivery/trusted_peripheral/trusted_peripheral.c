@@ -109,10 +109,26 @@ static psa_status_t tfm_tp_sensor_data_get_ipc(psa_msg_t *msg)
     /* get & set value of first argument */
     size_t ret = 0;
     ret = psa_read(msg->handle, 0, &first_argument, msg->out_size[0]); /* should return number of bytes copied */
+	/* TODO remember that for some reason the size gets set to 0 after reading */
     if (ret != msg->in_size[0]) { return PSA_ERROR_PROGRAMMER_ERROR; }
 #endif
 
     return tfm_tp_sensor_data_get((void*) msg->handle);
+}
+
+psa_status_t tfm_tp_sensor_data_get_sfn(const psa_msg_t *msg)
+{
+    switch (msg->type) {
+
+    case 0:
+        return tfm_tp_sensor_data_get(msg->handle);
+    //case TFM_PS_GET_INFO:
+    //    return tfm_ps_get_info_req(msg);
+    default:
+        return PSA_ERROR_PROGRAMMER_ERROR;
+    }
+
+    return PSA_ERROR_GENERIC_ERROR;
 }
 
 typedef psa_status_t (*tp_func_t)(psa_msg_t *);
@@ -137,7 +153,7 @@ static void tp_signal_handle(psa_signal_t signal, tp_func_t pfn)
         psa_panic();
     }
 }
-
+#ifdef CONFIG_TFM_IPC
 psa_status_t tfm_tp_req_mngr_init(void)
 {
     psa_signal_t signals = 0;
@@ -162,6 +178,7 @@ psa_status_t tfm_tp_req_mngr_init(void)
 
     return PSA_ERROR_SERVICE_FAILURE;
 }
+#endif
 
 /**
  * @brief Stores a new persistent secp256r1 key (usage: ecdsa-with-SHA256)

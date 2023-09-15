@@ -10,7 +10,7 @@
       "short_name": "TFM_TP",
       "manifest": "${APPLICATION_SOURCE_DIR}/trusted_peripheral/tfm_trusted_peripheral.yaml",
       "output_path": "${TFM_BINARY_DIR}/trusted_peripheral",
-      "tfm_partition_ipc": true,
+      "tfm_partition_ipc": false,
       "version_major": 0,
       "version_minor": 1,
       "linker_pattern": {
