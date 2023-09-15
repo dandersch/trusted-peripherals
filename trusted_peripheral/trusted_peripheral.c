@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <psa/crypto.h>
 
 #ifdef UNTRUSTED
     #include "trusted_peripheral.h"
@@ -9,7 +10,6 @@
     #include <stm32_ll_i2c.h>
 #else
     #include "../src/trusted_peripheral.h"
-    #include <psa/crypto.h>
     #include "psa/service.h"
     #include "psa_manifest/tfm_trusted_peripheral.h"
     #include "tfm_api.h"
@@ -51,9 +51,7 @@ uint8_t our_image[1024];
 #include "main.h" // NOTE if we change SPI pins we have to change this file
 #include "test.h"
 
-#ifdef TRUSTED
 static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t key_usage, uint8_t *key_data);
-#endif
 
 #ifdef UNTRUSTED
 psa_status_t tp_init()
@@ -182,16 +180,16 @@ static psa_status_t tfm_tp_init()
 }
 
 #ifdef UNTRUSTED
-psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t mac_size)
+psa_status_t tp_sensor_data_get(float* temp, float* humidity, tp_mac_t* mac_out)
 #else
 static psa_status_t tfm_tp_sensor_data_get(void* handle)
 #endif
 {
+    float    buffer[2];
+    tp_mac_t mac;
 #ifdef TRUSTED
-    float buffer[2];
     float* temp     = &buffer[0];
     float* humidity = &buffer[1];
-    tp_mac_t mac;
 #endif
 
     /* measuring request (MR) command to sensor */
@@ -251,15 +249,6 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
 
     /* hash & sign data */
     {
-        /* NOTE static private key for testing */
-        static uint8_t priv_key_data[32] = {
-            0x14, 0xbc, 0xb9, 0x53, 0xa4, 0xee, 0xed, 0x50,
-            0x09, 0x36, 0x92, 0x07, 0x1d, 0xdb, 0x24, 0x2c,
-            0xef, 0xf9, 0x57, 0x92, 0x40, 0x4f, 0x49, 0xaa,
-            0xd0, 0x7c, 0x5b, 0x3f, 0x26, 0xa7, 0x80, 0x48
-        };
-
-#ifdef TRUSTED
         psa_status_t status;
         status = psa_crypto_init();
         if (status != PSA_SUCCESS)
@@ -268,36 +257,238 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
             return status;
         }
 
-        psa_key_id_t key_slot = 1;
-        status = crp_imp_key_secp256r1(key_slot, PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH, priv_key_data);
         psa_key_handle_t key_handle;
+        psa_key_id_t key_slot = 1;
+#ifdef TRUSTED
+        /* NOTE static private key for testing */
+        static uint8_t priv_key_data[32] = {
+            0x14, 0xbc, 0xb9, 0x53, 0xa4, 0xee, 0xed, 0x50,
+            0x09, 0x36, 0x92, 0x07, 0x1d, 0xdb, 0x24, 0x2c,
+            0xef, 0xf9, 0x57, 0x92, 0x40, 0x4f, 0x49, 0xaa,
+            0xd0, 0x7c, 0x5b, 0x3f, 0x26, 0xa7, 0x80, 0x48
+        };
+
+        status = crp_imp_key_secp256r1(key_slot, PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH, priv_key_data);
+        if (status != PSA_SUCCESS)
+        {
+            printf("Failed to import key: %d", status);
+        }
+#else
+        // from https://github.com/ARMmbed/mbed-os-example-mbed-crypto/blob/master/getting-started/main.cpp
+        static const uint8_t rsa_key[] =
+        {
+            0x30, 0x82, 0x02, 0x5e, 0x02, 0x01, 0x00, 0x02, 0x81, 0x81, 0x00, 0xaf,
+            0x05, 0x7d, 0x39, 0x6e, 0xe8, 0x4f, 0xb7, 0x5f, 0xdb, 0xb5, 0xc2, 0xb1,
+            0x3c, 0x7f, 0xe5, 0xa6, 0x54, 0xaa, 0x8a, 0xa2, 0x47, 0x0b, 0x54, 0x1e,
+            0xe1, 0xfe, 0xb0, 0xb1, 0x2d, 0x25, 0xc7, 0x97, 0x11, 0x53, 0x12, 0x49,
+            0xe1, 0x12, 0x96, 0x28, 0x04, 0x2d, 0xbb, 0xb6, 0xc1, 0x20, 0xd1, 0x44,
+            0x35, 0x24, 0xef, 0x4c, 0x0e, 0x6e, 0x1d, 0x89, 0x56, 0xee, 0xb2, 0x07,
+            0x7a, 0xf1, 0x23, 0x49, 0xdd, 0xee, 0xe5, 0x44, 0x83, 0xbc, 0x06, 0xc2,
+            0xc6, 0x19, 0x48, 0xcd, 0x02, 0xb2, 0x02, 0xe7, 0x96, 0xae, 0xbd, 0x94,
+            0xd3, 0xa7, 0xcb, 0xf8, 0x59, 0xc2, 0xc1, 0x81, 0x9c, 0x32, 0x4c, 0xb8,
+            0x2b, 0x9c, 0xd3, 0x4e, 0xde, 0x26, 0x3a, 0x2a, 0xbf, 0xfe, 0x47, 0x33,
+            0xf0, 0x77, 0x86, 0x9e, 0x86, 0x60, 0xf7, 0xd6, 0x83, 0x4d, 0xa5, 0x3d,
+            0x69, 0x0e, 0xf7, 0x98, 0x5f, 0x6b, 0xc3, 0x02, 0x03, 0x01, 0x00, 0x01,
+            0x02, 0x81, 0x81, 0x00, 0x87, 0x4b, 0xf0, 0xff, 0xc2, 0xf2, 0xa7, 0x1d,
+            0x14, 0x67, 0x1d, 0xdd, 0x01, 0x71, 0xc9, 0x54, 0xd7, 0xfd, 0xbf, 0x50,
+            0x28, 0x1e, 0x4f, 0x6d, 0x99, 0xea, 0x0e, 0x1e, 0xbc, 0xf8, 0x2f, 0xaa,
+            0x58, 0xe7, 0xb5, 0x95, 0xff, 0xb2, 0x93, 0xd1, 0xab, 0xe1, 0x7f, 0x11,
+            0x0b, 0x37, 0xc4, 0x8c, 0xc0, 0xf3, 0x6c, 0x37, 0xe8, 0x4d, 0x87, 0x66,
+            0x21, 0xd3, 0x27, 0xf6, 0x4b, 0xbe, 0x08, 0x45, 0x7d, 0x3e, 0xc4, 0x09,
+            0x8b, 0xa2, 0xfa, 0x0a, 0x31, 0x9f, 0xba, 0x41, 0x1c, 0x28, 0x41, 0xed,
+            0x7b, 0xe8, 0x31, 0x96, 0xa8, 0xcd, 0xf9, 0xda, 0xa5, 0xd0, 0x06, 0x94,
+            0xbc, 0x33, 0x5f, 0xc4, 0xc3, 0x22, 0x17, 0xfe, 0x04, 0x88, 0xbc, 0xe9,
+            0xcb, 0x72, 0x02, 0xe5, 0x94, 0x68, 0xb1, 0xea, 0xd1, 0x19, 0x00, 0x04,
+            0x77, 0xdb, 0x2c, 0xa7, 0x97, 0xfa, 0xc1, 0x9e, 0xda, 0x3f, 0x58, 0xc1,
+            0x02, 0x41, 0x00, 0xe2, 0xab, 0x76, 0x08, 0x41, 0xbb, 0x9d, 0x30, 0xa8,
+            0x1d, 0x22, 0x2d, 0xe1, 0xeb, 0x73, 0x81, 0xd8, 0x22, 0x14, 0x40, 0x7f,
+            0x1b, 0x97, 0x5c, 0xbb, 0xfe, 0x4e, 0x1a, 0x94, 0x67, 0xfd, 0x98, 0xad,
+            0xbd, 0x78, 0xf6, 0x07, 0x83, 0x6c, 0xa5, 0xbe, 0x19, 0x28, 0xb9, 0xd1,
+            0x60, 0xd9, 0x7f, 0xd4, 0x5c, 0x12, 0xd6, 0xb5, 0x2e, 0x2c, 0x98, 0x71,
+            0xa1, 0x74, 0xc6, 0x6b, 0x48, 0x81, 0x13, 0x02, 0x41, 0x00, 0xc5, 0xab,
+            0x27, 0x60, 0x21, 0x59, 0xae, 0x7d, 0x6f, 0x20, 0xc3, 0xc2, 0xee, 0x85,
+            0x1e, 0x46, 0xdc, 0x11, 0x2e, 0x68, 0x9e, 0x28, 0xd5, 0xfc, 0xbb, 0xf9,
+            0x90, 0xa9, 0x9e, 0xf8, 0xa9, 0x0b, 0x8b, 0xb4, 0x4f, 0xd3, 0x64, 0x67,
+            0xe7, 0xfc, 0x17, 0x89, 0xce, 0xb6, 0x63, 0xab, 0xda, 0x33, 0x86, 0x52,
+            0xc3, 0xc7, 0x3f, 0x11, 0x17, 0x74, 0x90, 0x2e, 0x84, 0x05, 0x65, 0x92,
+            0x70, 0x91, 0x02, 0x41, 0x00, 0xb6, 0xcd, 0xbd, 0x35, 0x4f, 0x7d, 0xf5,
+            0x79, 0xa6, 0x3b, 0x48, 0xb3, 0x64, 0x3e, 0x35, 0x3b, 0x84, 0x89, 0x87,
+            0x77, 0xb4, 0x8b, 0x15, 0xf9, 0x4e, 0x0b, 0xfc, 0x05, 0x67, 0xa6, 0xae,
+            0x59, 0x11, 0xd5, 0x7a, 0xd6, 0x40, 0x9c, 0xf7, 0x64, 0x7b, 0xf9, 0x62,
+            0x64, 0xe9, 0xbd, 0x87, 0xeb, 0x95, 0xe2, 0x63, 0xb7, 0x11, 0x0b, 0x9a,
+            0x1f, 0x9f, 0x94, 0xac, 0xce, 0xd0, 0xfa, 0xfa, 0x4d, 0x02, 0x40, 0x71,
+            0x19, 0x5e, 0xec, 0x37, 0xe8, 0xd2, 0x57, 0xde, 0xcf, 0xc6, 0x72, 0xb0,
+            0x7a, 0xe6, 0x39, 0xf1, 0x0c, 0xbb, 0x9b, 0x0c, 0x73, 0x9d, 0x0c, 0x80,
+            0x99, 0x68, 0xd6, 0x44, 0xa9, 0x4e, 0x3f, 0xd6, 0xed, 0x92, 0x87, 0x07,
+            0x7a, 0x14, 0x58, 0x3f, 0x37, 0x90, 0x58, 0xf7, 0x6a, 0x8a, 0xec, 0xd4,
+            0x3c, 0x62, 0xdc, 0x8c, 0x0f, 0x41, 0x76, 0x66, 0x50, 0xd7, 0x25, 0x27,
+            0x5a, 0xc4, 0xa1, 0x02, 0x41, 0x00, 0xbb, 0x32, 0xd1, 0x33, 0xed, 0xc2,
+            0xe0, 0x48, 0xd4, 0x63, 0x38, 0x8b, 0x7b, 0xe9, 0xcb, 0x4b, 0xe2, 0x9f,
+            0x4b, 0x62, 0x50, 0xbe, 0x60, 0x3e, 0x70, 0xe3, 0x64, 0x75, 0x01, 0xc9,
+            0x7d, 0xdd, 0xe2, 0x0a, 0x4e, 0x71, 0xbe, 0x95, 0xfd, 0x5e, 0x71, 0x78,
+            0x4e, 0x25, 0xac, 0xa4, 0xba, 0xf2, 0x5b, 0xe5, 0x73, 0x8a, 0xae, 0x59,
+            0xbb, 0xfe, 0x1c, 0x99, 0x77, 0x81, 0x44, 0x7a, 0x2b, 0x24,
+        };
+
+        psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+        psa_algorithm_t alg = PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_SHA_256);
+        psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH);
+        psa_set_key_algorithm(&attributes, alg);
+        psa_set_key_type(&attributes, PSA_KEY_TYPE_RSA_KEY_PAIR);
+        psa_set_key_bits(&attributes, 1024);
+
+        /* Import the key */
+        status = psa_import_key(&attributes, rsa_key, sizeof(rsa_key), &key_slot);
+        if (status != PSA_SUCCESS) {
+            printf("Failed to import key: %d\n", status);
+            return status;
+        }
+#endif
+
+#ifdef UNTRUSTED
+        buffer[0] = *temp;
+        buffer[1] = *humidity;
+#endif
 
         /* TODO find out why this has to be after the key import */
         size_t p_hash_length;
         status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) buffer, sizeof(buffer),
                                   mac.hash, MAC_HASH_SIZE, &p_hash_length);
 
+        size_t sig_len;
+#ifdef TRUSTED
         /* test signing */
         psa_open_key(key_slot, &key_handle);
         if (status != PSA_SUCCESS) { // Failed to open persistent key
             return status;
         }
 
-        size_t sig_len;
+        /* TODO check for error */
         psa_sign_hash(key_handle, PSA_ALG_ECDSA(PSA_ALG_SHA_256), /* TODO check if correct */
                       mac.hash, MAC_HASH_SIZE, mac.sign, MAC_SIGN_SIZE, &sig_len),
+        psa_close_key(key_handle);
+#else
+
+        static const uint8_t hash[] = {
+        0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde,
+        0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c,
+        0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad
+        };
+        uint8_t signature[PSA_SIGNATURE_MAX_SIZE] = {0};
+
+        status = psa_sign_hash(key_slot, alg, mac.hash, sizeof(mac.hash),
+                               mac.sign, sizeof(mac.sign), &sig_len);
+        if (status != PSA_SUCCESS) {
+            printf("Failed to sign hash: %d\n", status);
+            return status;
+        }
+#endif
+
+#ifdef TRUSTED
+        psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
+#else
+        *mac_out = mac;
+#endif
 
         //psa_status_t psa_sign_message(psa_key_id_t key, psa_algorithm_t alg, const uint8_t * input,
         //                              size_t input_length, uint8_t * signature, size_t signature_size,
         //                              size_t * signature_length);
-
-        psa_close_key(key_handle);
-
-        psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
-#endif
     }
 
     return 0; // PSA_SUCCESS
+}
+
+/**
+ * @brief Stores a new persistent secp256r1 key (usage: ecdsa-with-SHA256)
+ *        in ITS, associating it with the specified unique key identifier.
+ *
+ * This function will store a new persistent secp256r1 key in internal trusted
+ * storage. Cryptographic operations can then be performed using the key
+ * identifier (key_id) associated with this persistent key. Only the 32-byte
+ * private key needs to be supplied, the public key can be derived using
+ * the supplied private key value.
+ *
+ * @param key_id        The permament identifier for the generated key.
+ * @param key_usage     The usage policy for the key.
+ * @param key_data      Pointer to the 32-byte private key data.
+ */
+static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t key_usage, uint8_t *key_data)
+{
+    psa_status_t status = PSA_SUCCESS;
+    psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
+    psa_key_type_t key_type = PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1);
+    psa_algorithm_t alg = PSA_ALG_ECDSA(PSA_ALG_SHA_256);
+    psa_key_handle_t key_handle;
+    size_t key_len = 32;
+
+    size_t data_len; (void) data_len;
+    uint8_t data_out[65] = { 0 }; /* ECDSA public key = 65 bytes. */ (void) data_out;
+    int comp_result; (void) comp_result;
+
+    /* Setup the key's attributes before the creation request. */
+    psa_set_key_id(&key_attributes, key_id);
+    psa_set_key_usage_flags(&key_attributes, key_usage);
+    //psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_PERSISTENT);
+    psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_VOLATILE);
+    psa_set_key_algorithm(&key_attributes, alg);
+    psa_set_key_type(&key_attributes, key_type);
+
+    /* Import the private key, creating the persistent key on success */
+    status = psa_import_key(&key_attributes, key_data, key_len, &key_handle);
+    if (status != PSA_SUCCESS) { // Failed to import key
+        return status;
+    }
+
+    /* Close the key to free up the volatile slot. */
+    status = psa_close_key(key_handle);
+    if (status != PSA_SUCCESS) { // Failed to close persistent key
+        return status;
+    }
+
+#if 0
+    /* Try to retrieve the public key. */
+    status = crp_get_pub_key(key_id, data_out, sizeof(data_out), &data_len);
+
+    /* Export the private key if usage includes PSA_KEY_USAGE_EXPORT. */
+    if (key_usage & PSA_KEY_USAGE_EXPORT) {
+        /* Re-open the persisted key based on the key ID. */
+        status = psa_open_key(key_id, &key_handle);
+        if (status != PSA_SUCCESS) { // Failed to open persistent key
+            return status;
+        }
+
+        /* Read the original (private) key data back. */
+        status = psa_export_key(key_handle, data_out, sizeof(data_out), &data_len);
+        if (status != PSA_SUCCESS) { // Failed to export key
+            return status;
+        }
+
+        /* Check key len. */
+        if (data_len != key_len) { // Unexpected number of bytes in exported key
+            return status;
+        }
+
+        /* Verify that the exported private key matches input data. */
+        comp_result = memcmp(data_out, key_data, key_len);
+        if (comp_result != 0) { // Imported/exported private key mismatch
+            return status;
+        }
+
+        /* Display the private key. */
+        //LOG_INF("Private key data:");
+        //al_dump_log();
+        //sf_hex_tabulate_16(&crp_fmt, data_out, data_len);
+
+        /* Close the key to free up the volatile slot. */
+        status = psa_close_key(key_handle);
+        if (status != PSA_SUCCESS) { // Failed to close persistent key.
+            return status;
+        }
+    }
+#endif
+
+    return status;
+
 }
 
 #ifdef TRUSTED
@@ -383,95 +574,4 @@ psa_status_t tfm_tp_req_mngr_init(void)
     return PSA_ERROR_SERVICE_FAILURE;
 }
 #endif
-
-/**
- * @brief Stores a new persistent secp256r1 key (usage: ecdsa-with-SHA256)
- *        in ITS, associating it with the specified unique key identifier.
- *
- * This function will store a new persistent secp256r1 key in internal trusted
- * storage. Cryptographic operations can then be performed using the key
- * identifier (key_id) associated with this persistent key. Only the 32-byte
- * private key needs to be supplied, the public key can be derived using
- * the supplied private key value.
- *
- * @param key_id        The permament identifier for the generated key.
- * @param key_usage     The usage policy for the key.
- * @param key_data      Pointer to the 32-byte private key data.
- */
-static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t key_usage, uint8_t *key_data)
-{
-    psa_status_t status = PSA_SUCCESS;
-    psa_key_attributes_t key_attributes = PSA_KEY_ATTRIBUTES_INIT;
-    psa_key_type_t key_type = PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1);
-    psa_algorithm_t alg = PSA_ALG_ECDSA(PSA_ALG_SHA_256);
-    psa_key_handle_t key_handle;
-    size_t key_len = 32;
-    size_t data_len; (void) data_len;
-    uint8_t data_out[65] = { 0 }; /* ECDSA public key = 65 bytes. */ (void) data_out;
-    int comp_result; (void) comp_result;
-
-    /* Setup the key's attributes before the creation request. */
-    psa_set_key_id(&key_attributes, key_id);
-    psa_set_key_usage_flags(&key_attributes, key_usage);
-    psa_set_key_lifetime(&key_attributes, PSA_KEY_LIFETIME_PERSISTENT);
-    psa_set_key_algorithm(&key_attributes, alg);
-    psa_set_key_type(&key_attributes, key_type);
-
-    /* Import the private key, creating the persistent key on success */
-    status = psa_import_key(&key_attributes, key_data, key_len, &key_handle);
-    if (status != PSA_SUCCESS) { // Failed to import key
-        return status;
-    }
-
-    /* Close the key to free up the volatile slot. */
-    status = psa_close_key(key_handle);
-    if (status != PSA_SUCCESS) { // Failed to close persistent key
-        return status;
-    }
-
-#if 0
-    /* Try to retrieve the public key. */
-    status = crp_get_pub_key(key_id, data_out, sizeof(data_out), &data_len);
-
-    /* Export the private key if usage includes PSA_KEY_USAGE_EXPORT. */
-    if (key_usage & PSA_KEY_USAGE_EXPORT) {
-        /* Re-open the persisted key based on the key ID. */
-        status = psa_open_key(key_id, &key_handle);
-        if (status != PSA_SUCCESS) { // Failed to open persistent key
-            return status;
-        }
-
-        /* Read the original (private) key data back. */
-        status = psa_export_key(key_handle, data_out, sizeof(data_out), &data_len);
-        if (status != PSA_SUCCESS) { // Failed to export key
-            return status;
-        }
-
-        /* Check key len. */
-        if (data_len != key_len) { // Unexpected number of bytes in exported key
-            return status;
-        }
-
-        /* Verify that the exported private key matches input data. */
-        comp_result = memcmp(data_out, key_data, key_len);
-        if (comp_result != 0) { // Imported/exported private key mismatch
-            return status;
-        }
-
-        /* Display the private key. */
-        //LOG_INF("Private key data:");
-        //al_dump_log();
-        //sf_hex_tabulate_16(&crp_fmt, data_out, data_len);
-
-        /* Close the key to free up the volatile slot. */
-        status = psa_close_key(key_handle);
-        if (status != PSA_SUCCESS) { // Failed to close persistent key.
-            return status;
-        }
-    }
-#endif
-
-    return status;
-
-}
 #endif
