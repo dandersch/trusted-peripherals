@@ -39,8 +39,6 @@
 ** PB5 - SPI1_MOSI
 */
 
-static int hal_ready = 0;
-
 /* I2C peripheral */
 #define I2C_SLAVE_ADDR 0x28 /* TODO why does zephyr use 0x28, but the HAL version expects 0x50 */
 static I2C_HandleTypeDef i2c2_h; // pinctrl-0 = < &i2c2_sda_pf0 &i2c2_scl_pf1 >;
@@ -58,6 +56,132 @@ static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t k
 #endif
 
 #ifdef UNTRUSTED
+psa_status_t tp_init()
+#else
+static psa_status_t tfm_tp_init()
+#endif
+{
+    HAL_Init();
+
+    /* gpio init */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin   = GPIO_PIN_7; /* blue led */
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_9; /* red led */
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /* spi init */
+    hspi1.Instance               = SPI1;
+    hspi1.Init.Mode              = SPI_MODE_MASTER;
+    hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
+    hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
+    hspi1.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+    hspi1.Init.CLKPhase          = SPI_PHASE_2EDGE;
+    hspi1.Init.NSS               = SPI_NSS_SOFT;
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+    hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+    hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
+    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+    hspi1.Init.CRCPolynomial     = 10;
+    //hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
+    //hspi1.Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
+    if (HAL_SPI_Init(&hspi1) != HAL_OK)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+        printf("spi init failed\n");
+        return -1;
+    }
+    __HAL_RCC_SPI1_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_SPI_InitStruct = {0};
+    GPIO_SPI_InitStruct.Pin       = GPIO_PIN_3 | // PB3 -> SPI1_SCK
+                                    GPIO_PIN_5;  // PB5 -> SPI1_MOSI
+    GPIO_SPI_InitStruct.Mode      = GPIO_MODE_AF_PP; // alternate function push pull
+    GPIO_SPI_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
+    GPIO_SPI_InitStruct.Alternate = GPIO_AF5_SPI1;
+    HAL_GPIO_Init(GPIOB, &GPIO_SPI_InitStruct);
+
+    HAL_GPIO_WritePin(GPIOG, OLED_DC_Pin|OLED_RST_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET);
+
+    /* set dc rst pin */
+    GPIO_InitStruct.Pin   = OLED_DC_Pin|OLED_RST_Pin;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
+    /* set spi_cs pin */
+    GPIO_InitStruct.Pin       = OLED_CS_Pin;
+    GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
+
+    HAL_SPI_StateTypeDef spi_state = HAL_SPI_GetState(&hspi1);
+    uint32_t spi_error             = HAL_SPI_GetError(&hspi1); // HAL_SPI_ERROR_NONE
+    if (spi_state != HAL_SPI_STATE_READY || spi_error != HAL_SPI_ERROR_NONE)
+    {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+        printf("SPI NOT READY, STATUS: %i, ERROR: %i\n", spi_state, spi_error);
+        return spi_error;
+    }
+
+    /* LED code */
+    {
+        //OLED_0in96_test(); // demo with a while(1) loop
+
+        OLED_0in96_Init();
+        Driver_Delay_ms(500);
+
+        Paint_NewImage(our_image, OLED_0in96_WIDTH, OLED_0in96_HEIGHT, 90, BLACK);
+        Paint_SelectImage(our_image);
+        Driver_Delay_ms(500);
+        Paint_Clear(BLACK);
+    }
+
+    /* i2c init */
+    HAL_I2C_MspInit(&i2c2_h);
+    i2c2_h.Instance              = I2C2; /* TODO check in stm32l552xx.h if I2C2 is I2C2_S (secure) or I2C2_NS */
+    i2c2_h.Init.Timing           = 0x40505681;
+    i2c2_h.Init.OwnAddress1      = 0;
+    i2c2_h.Init.AddressingMode   = I2C_ADDRESSINGMODE_7BIT;
+    i2c2_h.Init.DualAddressMode  = I2C_DUALADDRESS_DISABLE;
+    i2c2_h.Init.OwnAddress2      = 0;
+    i2c2_h.Init.GeneralCallMode  = I2C_GENERALCALL_DISABLE;
+    i2c2_h.Init.NoStretchMode    = I2C_NOSTRETCH_DISABLE;
+
+    if (HAL_I2C_Init(&i2c2_h) != HAL_OK)
+    {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+        printf("i2c init failed\n"); /* NOTE no working printf in secure code, so we set the led too */
+        return -132; // PSA_ERROR_GENERIC_ERROR;
+    }
+
+    HAL_StatusTypeDef i2c_fail   = HAL_I2C_IsDeviceReady(&i2c2_h, 0x50, 100, HAL_MAX_DELAY);
+    if (i2c_fail)
+    {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
+        printf("I2C NOT READY, STATUS: %i\n", i2c_fail);
+        return -132; // PSA_ERROR_GENERIC_ERROR;
+    }
+
+    return 0; // PSA_SUCCESS
+}
+
+#ifdef UNTRUSTED
 psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t mac_size)
 #else
 static psa_status_t tfm_tp_sensor_data_get(void* handle)
@@ -69,128 +193,6 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
     float* humidity = &buffer[1];
     tp_mac_t mac;
 #endif
-
-    if (!hal_ready)
-    {
-        HAL_Init();
-
-        /* gpio init */
-        GPIO_InitTypeDef GPIO_InitStruct = {0};
-        GPIO_InitStruct.Pin   = GPIO_PIN_7; /* blue led */
-        GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull  = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-        GPIO_InitStruct.Pin = GPIO_PIN_9; /* red led */
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-        /* spi init */
-        hspi1.Instance               = SPI1;
-        hspi1.Init.Mode              = SPI_MODE_MASTER;
-        hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
-        hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
-        hspi1.Init.CLKPolarity       = SPI_POLARITY_HIGH;
-        hspi1.Init.CLKPhase          = SPI_PHASE_2EDGE;
-        hspi1.Init.NSS               = SPI_NSS_SOFT;
-        hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
-        hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-        hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
-        hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
-        hspi1.Init.CRCPolynomial     = 10;
-        //hspi1.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
-        //hspi1.Init.NSSPMode          = SPI_NSS_PULSE_ENABLE;
-        if (HAL_SPI_Init(&hspi1) != HAL_OK)
-        {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
-            printf("spi init failed\n");
-            return -1;
-        }
-        __HAL_RCC_SPI1_CLK_ENABLE();
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-        __HAL_RCC_GPIOB_CLK_ENABLE();
-        __HAL_RCC_GPIOC_CLK_ENABLE();
-        __HAL_RCC_GPIOG_CLK_ENABLE();
-
-        GPIO_InitTypeDef GPIO_SPI_InitStruct = {0};
-        GPIO_SPI_InitStruct.Pin       = GPIO_PIN_3 | // PB3 -> SPI1_SCK
-                                        GPIO_PIN_5;  // PB5 -> SPI1_MOSI
-        GPIO_SPI_InitStruct.Mode      = GPIO_MODE_AF_PP; // alternate function push pull
-        GPIO_SPI_InitStruct.Speed     = GPIO_SPEED_FREQ_HIGH;
-        GPIO_SPI_InitStruct.Alternate = GPIO_AF5_SPI1;
-        HAL_GPIO_Init(GPIOB, &GPIO_SPI_InitStruct);
-
-        HAL_GPIO_WritePin(GPIOG, OLED_DC_Pin|OLED_RST_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(OLED_CS_GPIO_Port, OLED_CS_Pin, GPIO_PIN_RESET);
-
-        /* set dc rst pin */
-        GPIO_InitStruct.Pin   = OLED_DC_Pin|OLED_RST_Pin;
-        GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull  = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-        /* set spi_cs pin */
-        GPIO_InitStruct.Pin       = OLED_CS_Pin;
-        GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull      = GPIO_NOPULL;
-        GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
-        GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(OLED_CS_GPIO_Port, &GPIO_InitStruct);
-
-        HAL_SPI_StateTypeDef spi_state = HAL_SPI_GetState(&hspi1);
-        uint32_t spi_error             = HAL_SPI_GetError(&hspi1); // HAL_SPI_ERROR_NONE
-        if (spi_state != HAL_SPI_STATE_READY || spi_error != HAL_SPI_ERROR_NONE)
-        {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET); // set red led
-            printf("SPI NOT READY, STATUS: %i, ERROR: %i\n", spi_state, spi_error);
-            return spi_error;
-        }
-
-        /* LED code */
-        {
-            //OLED_0in96_test(); // demo with a while(1) loop
-
-            OLED_0in96_Init();
-            Driver_Delay_ms(500);
-
-            Paint_NewImage(our_image, OLED_0in96_WIDTH, OLED_0in96_HEIGHT, 90, BLACK);
-            Paint_SelectImage(our_image);
-            Driver_Delay_ms(500);
-            Paint_Clear(BLACK);
-        }
-
-        /* i2c init */
-        HAL_I2C_MspInit(&i2c2_h);
-        i2c2_h.Instance              = I2C2; /* TODO check in stm32l552xx.h if I2C2 is I2C2_S (secure) or I2C2_NS */
-        i2c2_h.Init.Timing           = 0x40505681;
-        i2c2_h.Init.OwnAddress1      = 0;
-        i2c2_h.Init.AddressingMode   = I2C_ADDRESSINGMODE_7BIT;
-        i2c2_h.Init.DualAddressMode  = I2C_DUALADDRESS_DISABLE;
-        i2c2_h.Init.OwnAddress2      = 0;
-        i2c2_h.Init.GeneralCallMode  = I2C_GENERALCALL_DISABLE;
-        i2c2_h.Init.NoStretchMode    = I2C_NOSTRETCH_DISABLE;
-
-        if (HAL_I2C_Init(&i2c2_h) != HAL_OK)
-        {
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
-            printf("i2c init failed\n"); /* NOTE no working printf in secure code, so we set the led too */
-            return -132; // PSA_ERROR_GENERIC_ERROR;
-        }
-
-        HAL_StatusTypeDef i2c_fail   = HAL_I2C_IsDeviceReady(&i2c2_h, 0x50, 100, HAL_MAX_DELAY);
-        if (i2c_fail)
-        {
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET); // set red led
-            printf("I2C NOT READY, STATUS: %i\n", i2c_fail);
-            return -132; // PSA_ERROR_GENERIC_ERROR;
-        }
-
-        hal_ready = 1;
-    }
 
     /* measuring request (MR) command to sensor */
     uint8_t msg[1] = {0};
@@ -321,10 +323,10 @@ psa_status_t tfm_tp_sensor_data_get_sfn(const psa_msg_t *msg)
 {
     switch (msg->type) {
 
-    case 0:
+    case TP_API_INIT:
+        return tfm_tp_init();
+    case TP_SENSOR_DATA_GET:
         return tfm_tp_sensor_data_get(msg->handle);
-    //case TFM_PS_GET_INFO:
-    //    return tfm_ps_get_info_req(msg);
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }

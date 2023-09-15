@@ -11,6 +11,23 @@
 #endif
 #include "psa_manifest/sid.h"
 
+psa_status_t tp_init()
+{
+    psa_status_t status;
+    psa_invec  in_vec[]  = { { .base = NULL, .len = 0 } };
+    psa_outvec out_vec[] = { { .base = NULL, .len = 0 } };
+
+    #if defined(CONFIG_TFM_IPC)
+        printf("USING IPC: ");
+        // TODO
+    #else
+        printf("USING SFN\n");
+        status = psa_call(TFM_TP_SENSOR_DATA_GET_HANDLE, TP_API_INIT, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+    #endif
+
+    return status;
+}
+
 psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t mac_size)
 {
     psa_status_t status;
@@ -23,8 +40,6 @@ psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t 
     }; // output parameter
 
 #if defined(CONFIG_TFM_IPC)
-    printf("USING IPC: ");
-
     psa_handle_t handle;
 
     handle = psa_connect(TFM_TP_SENSOR_DATA_GET_SID, TFM_TP_SENSOR_DATA_GET_VERSION);
@@ -35,9 +50,7 @@ psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t 
 
     psa_close(handle);
 #else
-    printf("USING SFN: ");
-
-    status = psa_call(TFM_TP_SENSOR_DATA_GET_HANDLE, 0, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+    status = psa_call(TFM_TP_SENSOR_DATA_GET_HANDLE, TP_SENSOR_DATA_GET, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
 #endif
 
     return status;

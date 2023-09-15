@@ -14,6 +14,9 @@ int main(void)
 {
     tp_mac_t mac = {0};
 
+    psa_status_t ret = tp_init();
+    if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
+
     for (;;)
     {
         uint32_t tick_begin = HAL_GetTick(); /* TODO by default the tick increments for every ms.

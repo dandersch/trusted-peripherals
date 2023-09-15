@@ -13,4 +13,9 @@ typedef struct {
     uint8_t sign[MAC_SIGN_SIZE];
 } tp_mac_t;
 
+#define TP_API_INIT          0
+#define TP_SENSOR_DATA_GET   1
+
+psa_status_t tp_init();
+
 psa_status_t tp_sensor_data_get(float* temp, float* humidity, void* mac, size_t mac_size);
