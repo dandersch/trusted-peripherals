@@ -31,10 +31,17 @@ int main(void)
         printk("Temp: %f ", sensor_temperature);
         printk("Humidity: %f\n", sensor_humidity);
 
-        printk("MAC: ");
+        printk("HASH: ");
         for (int i = 0; i < 32; i++)
         {
-            printk("%02x", mac.buf[i]);
+            printk("%02x", mac.hash[i]);
+        }
+        printk("\n");
+
+        printk("SIGN: ");
+        for (int i = 0; i < 256; i++)
+        {
+            printk("%02x", mac.sign[i]);
         }
         printk("\n");
 
