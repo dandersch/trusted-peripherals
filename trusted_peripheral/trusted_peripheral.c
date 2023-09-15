@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+
 #ifdef UNTRUSTED
     #include "trusted_peripheral.h"
 
@@ -7,6 +8,7 @@
     #include <soc.h>
     #include <stm32_ll_i2c.h>
 #else
+    #include "../src/trusted_peripheral.h"
     #include <psa/crypto.h>
     #include "psa/service.h"
     #include "psa_manifest/tfm_trusted_peripheral.h"
@@ -20,15 +22,6 @@
                                     * CMakeLists.txt.  TF-M comes with the stm32 hal
                                     * library, but not i2c or spi related stuff */
     #include "stm32l5xx_hal_spi.h" /* same as above */
-
-    /* TODO duplicated on non-secure side */
-    #define MAC_HASH_SIZE 256 /* NOTE in bytes, TODO get correct one with PSA_HASH_LENGTH(alg) or use
-                               * PSA_MAC_MAX_SIZE
-                               * PSA_HASH_MAX_SIZE
-                               */
-    typedef struct {
-        uint8_t buf[MAC_HASH_SIZE];  /* lets assume our data packet fits into this buffer */
-    } tp_mac_t;
 #endif
 
 /* PINS in USE:
@@ -254,9 +247,8 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
     psa_write((psa_handle_t)handle, 1, humidity, sizeof(*humidity));
 #endif
 
-#if 0
     /* hash & sign data */
-    if (0) {
+    {
         /* NOTE static private key for testing */
         static uint8_t priv_key_data[32] = {
             0x14, 0xbc, 0xb9, 0x53, 0xa4, 0xee, 0xed, 0x50,
@@ -265,26 +257,23 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
             0xd0, 0x7c, 0x5b, 0x3f, 0x26, 0xa7, 0x80, 0x48
         };
 
+#ifdef TRUSTED
         psa_status_t status;
         status = psa_crypto_init();
-        if (status != PSA_SUCCESS) { /* TODO  */ }
+        if (status != PSA_SUCCESS)
+        {
+            printf("Failed to init crypto service\n");
+            return status;
+        }
 
         psa_key_id_t key_slot = 1;
-        status = crp_imp_key_secp256r1(key_slot,
-                                       PSA_KEY_USAGE_SIGN_HASH |
-                                       PSA_KEY_USAGE_VERIFY_HASH,
-                                       priv_key_data);
+        status = crp_imp_key_secp256r1(key_slot, PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH, priv_key_data);
         psa_key_handle_t key_handle;
 
+        /* TODO find out why this has to be after the key import */
         size_t p_hash_length;
-        status = psa_hash_compute(PSA_ALG_SHA_256,
-                                  (uint8_t*) temp_and_humidity,
-                                  sizeof(temp_and_humidity), // should work as long it's a real array
-                                  mac.buf,
-                                  MAC_HASH_SIZE, // TODO we also have this as an input parameter
-                                  &p_hash_length
-                                 );
-        // assert(p_hash_length == PSA_HASH_LENGTH(PSA_ALG_SHA_256));
+        status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) buffer, sizeof(buffer),
+                                  mac.hash, MAC_HASH_SIZE, &p_hash_length);
 
         /* test signing */
         psa_open_key(key_slot, &key_handle);
@@ -292,30 +281,19 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
             return status;
         }
 
-        uint8_t sig[PSA_VENDOR_ECDSA_SIGNATURE_MAX_SIZE] = { 0 };
         size_t sig_len;
+        psa_sign_hash(key_handle, PSA_ALG_ECDSA(PSA_ALG_SHA_256), /* TODO check if correct */
+                      mac.hash, MAC_HASH_SIZE, mac.sign, MAC_SIGN_SIZE, &sig_len),
 
-        psa_sign_hash(key_handle,
-                      PSA_ALG_ECDSA(PSA_ALG_SHA_256), // TODO check if correct
-                      mac.buf,
-                      MAC_HASH_SIZE,
-                      sig,
-                      sizeof(sig),
-                      &sig_len),
-
-        //psa_status_t psa_sign_message(psa_key_id_t key,
-        //                              psa_algorithm_t alg,
-        //                              const uint8_t * input,
-        //                              size_t input_length,
-        //                              uint8_t * signature,
-        //                              size_t signature_size,
+        //psa_status_t psa_sign_message(psa_key_id_t key, psa_algorithm_t alg, const uint8_t * input,
+        //                              size_t input_length, uint8_t * signature, size_t signature_size,
         //                              size_t * signature_length);
 
-        /* TODO close key handle */
+        psa_close_key(key_handle);
 
         psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
-    }
 #endif
+    }
 
     return 0; // PSA_SUCCESS
 }
@@ -337,6 +315,21 @@ static psa_status_t tfm_tp_sensor_data_get_ipc(psa_msg_t *msg)
 #endif
 
     return tfm_tp_sensor_data_get((void*) msg->handle);
+}
+
+psa_status_t tfm_tp_sensor_data_get_sfn(const psa_msg_t *msg)
+{
+    switch (msg->type) {
+
+    case 0:
+        return tfm_tp_sensor_data_get(msg->handle);
+    //case TFM_PS_GET_INFO:
+    //    return tfm_ps_get_info_req(msg);
+    default:
+        return PSA_ERROR_PROGRAMMER_ERROR;
+    }
+
+    return PSA_ERROR_GENERIC_ERROR;
 }
 
 typedef psa_status_t (*tp_func_t)(psa_msg_t *);
@@ -362,6 +355,7 @@ static void tp_signal_handle(psa_signal_t signal, tp_func_t pfn)
     }
 }
 
+#ifdef CONFIG_TFM_IPC
 psa_status_t tfm_tp_req_mngr_init(void)
 {
     psa_signal_t signals = 0;
@@ -386,6 +380,7 @@ psa_status_t tfm_tp_req_mngr_init(void)
 
     return PSA_ERROR_SERVICE_FAILURE;
 }
+#endif
 
 /**
  * @brief Stores a new persistent secp256r1 key (usage: ecdsa-with-SHA256)
