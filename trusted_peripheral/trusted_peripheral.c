@@ -274,6 +274,14 @@ static psa_status_t tfm_tp_sensor_data_get(void* handle)
             printf("Failed to import key: %d", status);
         }
 #else
+        // NOTE TODO
+        // - for encryption in trusted delivery, a public key on the device is
+        //   used, while the private key is stored on a remote server
+        // - for signing in all cases, a private key on the device is used,
+        //   while the public key is stored on a remote server
+        // - for encryption & decryption in trusted transformation, symmetric
+        //   encryption is used. The key is stored on the device and the server
+
         // from https://github.com/ARMmbed/mbed-os-example-mbed-crypto/blob/master/getting-started/main.cpp
         static const uint8_t rsa_key[] =
         {
