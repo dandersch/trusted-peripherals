@@ -3,14 +3,20 @@ Performance:
         STM32 trusted (SFN):    306ms
         STM32 untrusted:        410ms
 
+        STM32 trusted (IPC):    520ms (w/ decryption)
         STM32 trusted (SFN):    518ms (w/ decryption)
         STM32 untrusted:        720ms (w/ decryption)
         
         STM32 trusted (SFN):    207ms (no sensor)
         STM32 untrusted:        308ms (no sensor)
         
+        Emulated trusted (IPC):  ..ms
         Emulated trusted (SFN):   5ms
-        Emulated untrusted:      26ms
+        Emulated untrusted:      28ms
+
+        Emulated trusted (IPC):  60ms (w/ decryption)
+        Emulated trusted (SFN):  60ms (w/ decryption)
+        Emulated untrusted:      20ms (w/ decryption)
         
 Image sizes (512 KB available): west build -t rom_report --build-dir build_untrusted
         STM32 trusted:      132088 bytes (TF-M)

@@ -450,7 +450,21 @@ static psa_status_t tfm_tp_sensor_data_get_ipc(psa_msg_t *msg)
     if (ret != msg->in_size[0]) { return PSA_ERROR_PROGRAMMER_ERROR; }
 #endif
 
-    return tfm_tp_sensor_data_get((void*) msg->handle);
+    size_t ret = 0;
+    uint32_t api_call = 0;
+    ret = psa_read(msg->handle, 0, &api_call, msg->in_size[0]); /* should return number of bytes copied */
+    if (ret != msg->in_size[0]) { return PSA_ERROR_PROGRAMMER_ERROR; }
+
+    switch (api_call) {
+    case TP_API_INIT:
+        return tfm_tp_init();
+    case TP_SENSOR_DATA_GET:
+        return tfm_tp_sensor_data_get(msg->handle);
+    default:
+        return PSA_ERROR_PROGRAMMER_ERROR;
+    }
+
+    return PSA_ERROR_GENERIC_ERROR;
 }
 
 psa_status_t tfm_tp_sensor_data_get_sfn(const psa_msg_t *msg)
@@ -491,6 +505,7 @@ static void tp_signal_handle(psa_signal_t signal, tp_func_t pfn)
     }
 }
 
+/* TODO this does not get set w/ IPC mode */
 #ifdef CONFIG_TFM_IPC
 psa_status_t tfm_tp_req_mngr_init(void)
 {
@@ -517,4 +532,5 @@ psa_status_t tfm_tp_req_mngr_init(void)
     return PSA_ERROR_SERVICE_FAILURE;
 }
 #endif
+
 #endif
