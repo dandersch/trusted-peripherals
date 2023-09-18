@@ -12,3 +12,4 @@ config MYAPP_STM32
   select USE_STM32_LL_CORTEX
   select USE_STM32_HAL_SPI
   select USE_STM32_LL_SPI
+  depends on HAS_STM32CUBE

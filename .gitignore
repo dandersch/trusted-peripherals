@@ -1,4 +1,5 @@
 build
 build_trusted
 build_untrusted
+build_emulated
 .cache

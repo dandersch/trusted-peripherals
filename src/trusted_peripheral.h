@@ -6,9 +6,10 @@
   #include "tfm_api.h"
 #endif
 
-//#define MAC_HASH_SIZE 64  // == PSA_HASH_MAX_SIZE
-#define MAC_HASH_SIZE 32 // TODO why does it need to be 32 for untrusted?
-#define MAC_SIGN_SIZE 512 // == PSA_SIGNATURE_MAX_SIZE
+// PSA_HASH_MAX_SIZE      64
+// PSA_SIGNATURE_MAX_SIZE 512
+#define MAC_HASH_SIZE 32
+#define MAC_SIGN_SIZE 128
 typedef struct {
     uint8_t hash[MAC_HASH_SIZE];
     uint8_t sign[MAC_SIGN_SIZE];
@@ -71,4 +72,5 @@ typedef struct
 psa_status_t tp_trusted_transform(temp_data_t* data_io, transform_t* list_io,
                                   tp_mac_t* mac_out, transform_t transform);
 
+/* TODO change to use handles */
 psa_status_t tp_encrypted_transform(void* data_io, tp_mac_t* mac_io, transform_t transform);

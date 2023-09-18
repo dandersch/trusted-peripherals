@@ -18,7 +18,14 @@ target_include_directories(tfm_partitions
         ${CMAKE_BINARY_DIR}/trusted_peripheral
 )
 
-file(GLOB_RECURSE oled_driver_sources CONFIGURE_DEPENDS ../driver/oled_driver/*.c)
+if(DEFINED EMULATED)
+    message("#################################################")
+    message(STATUS "Building emulated setup")
+    message("#################################################")
+    target_compile_definitions(tfm_app_rot_partition_tp PUBLIC EMULATED)
+else()
+    file(GLOB_RECURSE oled_driver_sources CONFIGURE_DEPENDS ../driver/oled_driver/*.c)
+endif()
 
 # included because driver code is full of these warnings
 target_compile_options(tfm_app_rot_partition_tp PRIVATE -Wno-missing-braces)

@@ -11,12 +11,16 @@ if(DEFINED UNTRUSTED)
     target_compile_definitions(app PUBLIC UNTRUSTED)
 
     # OLED DRIVER
-    target_include_directories(app PRIVATE driver/oled_driver )
-    target_include_directories(app PRIVATE driver/oled_driver/Config )
-    target_include_directories(app PRIVATE driver/oled_driver/OLED )
-    target_include_directories(app PRIVATE driver/oled_driver/GUI )
-    target_include_directories(app PRIVATE driver/oled_driver/Example )
-    file(GLOB_RECURSE oled_driver_sources CONFIGURE_DEPENDS driver/oled_driver/*.c)
+    if(DEFINED EMULATED)
+        target_compile_definitions(app PUBLIC EMULATED)
+    else()
+        target_include_directories(app PRIVATE driver/oled_driver )
+        target_include_directories(app PRIVATE driver/oled_driver/Config )
+        target_include_directories(app PRIVATE driver/oled_driver/OLED )
+        target_include_directories(app PRIVATE driver/oled_driver/GUI )
+        target_include_directories(app PRIVATE driver/oled_driver/Example )
+        file(GLOB_RECURSE oled_driver_sources CONFIGURE_DEPENDS driver/oled_driver/*.c)
+    endif()
 
     target_include_directories(app PRIVATE src/ )
 
@@ -60,6 +64,15 @@ else()
       -DTFM_EXTRA_MANIFEST_LIST_FILES=${CMAKE_CURRENT_BINARY_DIR}/trusted_peripheral/tfm_manifest_list.yaml
       -DTFM_EXTRA_PARTITION_PATHS=${CMAKE_CURRENT_LIST_DIR}/trusted_peripheral
     )
+    
+if(DEFINED EMULATED)
+    target_compile_definitions(app PUBLIC EMULATED)
+    set_property(TARGET zephyr_property_target
+      APPEND PROPERTY TFM_CMAKE_OPTIONS
+      -DEMULATED=1
+    )
+else()
+endif()
     
     # include folder that has tfm_api.h
     target_include_directories(app PRIVATE
