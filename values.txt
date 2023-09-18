@@ -1,0 +1,38 @@
+Performance:
+        STM32 trusted (IPC):    ...ms
+        STM32 trusted (SFN):    306ms
+        STM32 untrusted:        410ms
+
+        STM32 trusted (SFN):    518ms (w/ decryption)
+        STM32 untrusted:        720ms (w/ decryption)
+        
+        STM32 trusted (SFN):    207ms (no sensor)
+        STM32 untrusted:        308ms (no sensor)
+        
+        Emulated trusted (SFN):   5ms
+        Emulated untrusted:      26ms
+        
+Image sizes (512 KB available): west build -t rom_report --build-dir build_untrusted
+        STM32 trusted:      132088 bytes (TF-M)
+                             69530 bytes (Zephyr)
+                             32588 bytes (bl2)
+                            234206 bytes
+
+        STM32 untrusted:    131629 bytes
+
+
+RAM usage (256 KB available):
+        STM32 trusted:       48108 bytes (TF-M)
+                             19033 bytes (Zephyr)
+                             27016 bytes (bl2)
+                             94157 bytes
+
+        STM32 untrusted:     55576 bytes
+
+
+Memory layout:
+        STM32 trusted:         224 KB (TF-M)
+                               172 KB (Zephyr)
+                                38 KB (bl2)
+
+        STM32 untrusted:       512 KB

@@ -29,7 +29,6 @@
     #endif
 #endif
 
-
 /* PINS in USE:
 **
 ** PA9 - red led
@@ -61,11 +60,10 @@ uint8_t our_image[1024];
 #include "test.h"
 #endif
 
-static psa_status_t crp_imp_key_secp256r1(psa_key_id_t key_id, psa_key_usage_t key_usage, uint8_t *key_data);
-
 /* keys */
+#define RSA_KEY_SIZE 1024
 static psa_key_id_t key_rsa_sign    = 1;
-//static psa_key_id_t key_rsa_verify  = 2; // stored on server
+static psa_key_id_t key_rsa_verify  = 2; // stored on server
 static psa_key_id_t key_rsa_crypt   = 3;
 static psa_key_id_t key_rsa_decrypt = 4;   // stored on server
 static psa_algorithm_t alg_sign    = PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_SHA_256);
@@ -199,7 +197,7 @@ static psa_status_t tfm_tp_init()
     #endif
     }
 
-    /* setup keys here */
+    /* setup keys */
     {
         psa_status_t status;
         status = psa_crypto_init();
@@ -214,8 +212,7 @@ static psa_status_t tfm_tp_init()
         psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH);
         psa_set_key_algorithm(&attributes,   alg_sign);
         psa_set_key_type(&attributes,        PSA_KEY_TYPE_RSA_KEY_PAIR);
-        psa_set_key_bits(&attributes,        1024);
-        //psa_set_key_lifetime(&attributes, PSA_KEY_LIFETIME_PERSISTENT);
+        psa_set_key_bits(&attributes,        RSA_KEY_SIZE);
 
         status = psa_import_key(&attributes, key_data_rsa, sizeof(key_data_rsa), &key_rsa_sign);
         if (status != PSA_SUCCESS) {
@@ -225,12 +222,11 @@ static psa_status_t tfm_tp_init()
 
         /* import encryption key (rsa private key) */
         //attributes                         = PSA_KEY_ATTRIBUTES_INIT;
-        psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_ENCRYPT);
+        psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT); /* decryption usage for testing */
         psa_set_key_algorithm(&attributes,   alg_encrypt);
         psa_set_key_type(&attributes,        PSA_KEY_TYPE_RSA_KEY_PAIR);
-        psa_set_key_bits(&attributes,        1024);
-        //psa_set_key_lifetime(&attributes, PSA_KEY_LIFETIME_PERSISTENT);
-        status = psa_import_key(&attributes, key_data_rsa_crypt, sizeof(key_data_rsa_crypt), &key_rsa_crypt);
+        psa_set_key_bits(&attributes,        RSA_KEY_SIZE);
+        status = psa_import_key(&attributes, key_data_rsa_crypt, sizeof(key_data_rsa_crypt), &key_rsa_decrypt);
         if (status != PSA_SUCCESS) {
             printf("Failed to import private key for decryption: %d\n", status);
             return status;
@@ -238,7 +234,7 @@ static psa_status_t tfm_tp_init()
 
         /* get rsa public key from private key above */
         size_t key_len;
-        psa_export_public_key(key_rsa_crypt, rsa_pub_key_buf, sizeof(rsa_pub_key_buf), &key_len);
+        psa_export_public_key(key_rsa_decrypt, rsa_pub_key_buf, sizeof(rsa_pub_key_buf), &key_len);
         if (status != PSA_SUCCESS) {
             printf("Failed to export public key for encryption: %d\n", status);
             return status;
@@ -248,8 +244,7 @@ static psa_status_t tfm_tp_init()
         psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_ENCRYPT);
         psa_set_key_algorithm(&attributes,   alg_encrypt);
         psa_set_key_type(&attributes,        PSA_KEY_TYPE_RSA_PUBLIC_KEY);
-        psa_set_key_bits(&attributes,        1024);
-        //psa_set_key_lifetime(&attributes, PSA_KEY_LIFETIME_PERSISTENT);
+        psa_set_key_bits(&attributes,        RSA_KEY_SIZE);
         status = psa_import_key(&attributes, rsa_pub_key_buf, key_len, &key_rsa_crypt);
         if (status != PSA_SUCCESS) {
             printf("Failed to import public key for encryption: %d\n", status);
@@ -263,151 +258,177 @@ static psa_status_t tfm_tp_init()
 #ifdef UNTRUSTED
 psa_status_t tp_sensor_data_get(float* temp, float* humidity, tp_mac_t* mac_out)
 #else
-static psa_status_t tfm_tp_sensor_data_get(void* handle)
+static psa_status_t tfm_tp_sensor_data_get(void* handle) /* TODO rename to trusted_capture */
 #endif
 {
     float    buffer[2];
     tp_mac_t mac;
-#ifdef TRUSTED
+    #ifdef TRUSTED
     float* temp     = &buffer[0];
     float* humidity = &buffer[1];
-#endif
-
-    #if !defined(EMULATED)
-    /* measuring request (MR) command to sensor */
-    uint8_t msg[1] = {0};
-    HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(&i2c2_h, 0x50, msg, 0, 1000); // Sending in Blocking mode
-    if (ret) { printf("Sending MR command at slave address failed!\n"); }
-    HAL_Delay(100);
-
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7); // toggle blue led for every cycle
-
-    /* sensor data fetch (DF) command */
-    {
-        uint8_t data[4];
-        HAL_StatusTypeDef err = HAL_I2C_Master_Receive(&i2c2_h, 0x50, (uint8_t*) &data, 4, 1000);
-        if (err) { printf("Reading from slave address failed!\n"); }
-
-        // 2 most significant bits of the first byte contain status information, the
-        // bit at 0x40 being the stalebit (if set, there is no new data yet)
-        uint8_t stale_bit = (data[0] & 0x40) >> 6;
-        if (stale_bit) {
-            printf("Data is not ready yet\n");
-        } else {
-            // 14 bits raw temperature in byte 3 & 4, read from left to right
-            uint32_t raw_value_temp = ((data[2] << 8) | data[3]) >> 2;
-
-            // 14 bits raw humidity in byte 1 & 2, read right from left and delete status bits from first byte
-            uint32_t raw_value_humid = ((data[0] & 0x3F) << 8) | data[1];
-
-            if (raw_value_temp < 0x3FFF && raw_value_humid < 0x3FFF) {
-                *temp     = ((float)(raw_value_temp) * 165.0F / 16383.0F) - 40.0F; // 14 bits, -40°C - +125°C
-                *humidity = (float)raw_value_humid * 100.0F / 16383.0F; // 14 bits, 0% - 100%
-
-            } else {
-                printf("Error converting raw data to normal values.\n");
-            }
-        }
-    }
-
-    /* update oled display */
-    if (TP_USE_DISPLAY) {
-        Paint_DrawString_EN(10, 0,  "SENSOR",   &Font16, WHITE, WHITE);
-        Paint_DrawString_EN(10, 20,  "Temp.",   &Font12, WHITE, WHITE);
-        Paint_DrawNum(60, 20, *temp, &Font12,  4, WHITE, WHITE);
-        Paint_DrawString_EN(10, 40, "Humid.", &Font12,  WHITE, WHITE);
-        Paint_DrawNum(60, 40, *humidity, &Font12, 5, WHITE, WHITE);
-
-        /* needs to at the end */
-        OLED_0in96_display(our_image);
-        Driver_Delay_ms(2000);
-        Paint_Clear(BLACK);
-    }
-    #else
-    /* made up sensor data for emulated setup */
-    {
-        static float change = 0;
-        *temp     = 20 + change;
-        *humidity = 50 + change;
-        change += 1;
-    }
     #endif
 
-
-    /* hash & sign data */
+    /* get peripheral data */
     {
-        psa_status_t status;
-        psa_key_handle_t key_handle;
-        psa_key_id_t key_slot = 1;
+        #if !defined(EMULATED)
+        /* measuring request (MR) command to sensor */
+        uint8_t msg[1] = {0};
+        HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(&i2c2_h, 0x50, msg, 0, 1000); // Sending in Blocking mode
+        if (ret) { printf("Sending MR command at slave address failed!\n"); }
+        HAL_Delay(100);
 
-#ifdef UNTRUSTED
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_7); // toggle blue led for every cycle
+
+        /* sensor data fetch (DF) command */
+        {
+            uint8_t data[4];
+            HAL_StatusTypeDef err = HAL_I2C_Master_Receive(&i2c2_h, 0x50, (uint8_t*) &data, 4, 1000);
+            if (err) { printf("Reading from slave address failed!\n"); }
+
+            // 2 most significant bits of the first byte contain status information, the
+            // bit at 0x40 being the stalebit (if set, there is no new data yet)
+            uint8_t stale_bit = (data[0] & 0x40) >> 6;
+            if (stale_bit) {
+                printf("Data is not ready yet\n");
+            } else {
+                // 14 bits raw temperature in byte 3 & 4, read from left to right
+                uint32_t raw_value_temp = ((data[2] << 8) | data[3]) >> 2;
+
+                // 14 bits raw humidity in byte 1 & 2, read right from left and delete status bits from first byte
+                uint32_t raw_value_humid = ((data[0] & 0x3F) << 8) | data[1];
+
+                if (raw_value_temp < 0x3FFF && raw_value_humid < 0x3FFF) {
+                    *temp     = ((float)(raw_value_temp) * 165.0F / 16383.0F) - 40.0F; // 14 bits, -40°C - +125°C
+                    *humidity = (float)raw_value_humid * 100.0F / 16383.0F; // 14 bits, 0% - 100%
+
+                } else {
+                    printf("Error converting raw data to normal values.\n");
+                }
+            }
+        }
+
+        /* update oled display */
+        if (TP_USE_DISPLAY)
+        {
+            Paint_DrawString_EN(10, 0,  "SENSOR",   &Font16, WHITE, WHITE);
+            Paint_DrawString_EN(10, 20,  "Temp.",   &Font12, WHITE, WHITE);
+            Paint_DrawNum(60, 20, *temp, &Font12,  4, WHITE, WHITE);
+            Paint_DrawString_EN(10, 40, "Humid.", &Font12,  WHITE, WHITE);
+            Paint_DrawNum(60, 40, *humidity, &Font12, 5, WHITE, WHITE);
+
+            /* needs to at the end */
+            OLED_0in96_display(our_image);
+            Driver_Delay_ms(2000);
+            Paint_Clear(BLACK);
+        }
+        #else
+        /* made up sensor data for emulated setup */
+        {
+            static float change = 0;
+            *temp     = 20 + change;
+            *humidity = 50 + change;
+            change += 1;
+        }
+        #endif
+    }
+
+    psa_status_t status;
+    psa_key_id_t key_slot = 1;
+    uint8_t ciphertext[PSA_ASYMMETRIC_ENCRYPT_OUTPUT_SIZE(PSA_KEY_TYPE_RSA_KEY_PAIR, 1024, alg_encrypt)];
+    size_t ciphertext_length;
+
+    #ifdef UNTRUSTED
+    buffer[0] = *temp;
+    buffer[1] = *humidity;
+    #endif
+
+    /* COMPUTE HASH (SHA256) */
+    {
+        size_t p_hash_length;
+        status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) buffer, sizeof(buffer),
+                                  mac.hash, MAC_HASH_SIZE, &p_hash_length);
+        if (status != PSA_SUCCESS) {
+            printf("Failed to compute hash: %d\n", status);
+            return status;
+        }
+    }
+
+    /* SIGN HASH (RSA) */
+    {
+        size_t sig_len;
+        status = psa_sign_hash(key_rsa_sign, alg_sign, mac.hash, sizeof(mac.hash),
+                               mac.sign, sizeof(mac.sign), &sig_len);
+        if (status != PSA_SUCCESS) {
+            printf("Failed to sign hash: %d\n", status);
+            return status;
+        }
+
+        if (sig_len != sizeof(mac.sign))
+        {
+            /* we expect the signature to fit perfectly */
+            printf("Signature length and size are different: %u %u\n", sig_len, sizeof(mac.sign));
+            return -1;
+        }
+    }
+
+    /* VERIFY SIGNATURE */
+    {
+        status = psa_verify_hash(key_rsa_sign, alg_sign, mac.hash, sizeof(mac.hash),
+                                 mac.sign, sizeof(mac.sign));
+        if (status != PSA_SUCCESS) {
+            printf("Couldn't verify signature: %d\n", status);
+            return status;
+        }
+    }
+
+    /* ENCRYPT DATA */
+    {
+        static const uint32_t max_plaintext_size = RSA_KEY_SIZE - 11; // 117 bytes
+
+        /* NOTE assumption that buffer is an array */
+        if (sizeof(buffer) > max_plaintext_size)
+        {
+            printf("Plaintext too large to encrypt: %u vs. %u\n", sizeof(buffer), max_plaintext_size);
+            return -1;
+        }
+
+        status = psa_asymmetric_encrypt(key_rsa_crypt, alg_encrypt,
+                               buffer, sizeof(buffer),
+                               NULL, 0, /* salt */
+                               ciphertext, sizeof(ciphertext),
+                               &ciphertext_length);
+
+        if (status != PSA_SUCCESS) {
+            printf("Couldn't encrypt peripheral data: %d\n", status);
+            return status;
+        }
+    }
+
+    /* DECRYPT DATA */
+    {
+        size_t output_length; // NOTE: for now we know that the buffer will be completely filled
+        status = psa_asymmetric_decrypt(key_rsa_decrypt, alg_encrypt,
+                                        ciphertext, ciphertext_length,
+                                        NULL, 0, /* salt */
+                                        buffer, sizeof(buffer), /* putting the output back into the buffer for now */
+                                        &output_length);
+        if (status != PSA_SUCCESS) {
+            printf("Couldn't decrypt ciphertext: %d\n", status);
+            return status;
+        }
+    }
+
+    /* WRITE TO OUTPUT PARAMS */
+    {
+    #ifdef TRUSTED
+        psa_write((psa_handle_t)handle, 0, temp, sizeof(*temp));
+        psa_write((psa_handle_t)handle, 1, humidity, sizeof(*humidity));
+        psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
+    #else
         buffer[0] = *temp;
         buffer[1] = *humidity;
-#endif
-
-        /* COMPUTE HASH (SHA256) */
-        {
-            size_t p_hash_length;
-            status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) buffer, sizeof(buffer),
-                                      mac.hash, MAC_HASH_SIZE, &p_hash_length);
-            if (status != PSA_SUCCESS) {
-                printf("Failed to compute hash: %d\n", status);
-                return status;
-            }
-        }
-
-        /* SIGN HASH (RSA) */
-        {
-            size_t sig_len;
-            status = psa_sign_hash(key_rsa_sign, alg_sign, mac.hash, sizeof(mac.hash),
-                                   mac.sign, sizeof(mac.sign), &sig_len);
-            if (status != PSA_SUCCESS) {
-                printf("Failed to sign hash: %d\n", status);
-                return status;
-            }
-
-            if (sig_len != sizeof(mac.sign))
-            {
-                /* we expect the signature to fit perfectly */
-                printf("Signature length and size are different: %u %u\n", sig_len, sizeof(mac.sign));
-                return -1;
-            }
-        }
-
-        /* VERIFY SIGNATURE */
-        {
-            status = psa_verify_hash(key_rsa_sign, alg_sign, mac.hash, sizeof(mac.hash),
-                                     mac.sign, sizeof(mac.sign));
-            if (status != PSA_SUCCESS) {
-                printf("Couldn't verify signature: %d\n", status);
-                return status;
-            }
-        }
-
-        /* TODO ENCRYPT DATA (RSA) */
-        {
-            psa_status_t psa_asymmetric_encrypt(psa_key_id_t key,
-                                    psa_algorithm_t alg,
-                                    const uint8_t * input,
-                                    size_t input_length,
-                                    const uint8_t * salt,
-                                    size_t salt_length,
-                                    uint8_t * output,
-                                    size_t output_size,
-                                    size_t * output_length);
-        }
-
-        /* WRITE TO OUTPUT PARAMS */
-        {
-        #ifdef TRUSTED
-            psa_write((psa_handle_t)handle, 0, temp, sizeof(*temp));
-            psa_write((psa_handle_t)handle, 1, humidity, sizeof(*humidity));
-            psa_write((psa_handle_t)handle, 2, &mac, sizeof(mac));
-        #else
-            *mac_out = mac;
-        #endif
-        }
-
+        *mac_out = mac;
+    #endif
     }
 
     return 0; // PSA_SUCCESS
