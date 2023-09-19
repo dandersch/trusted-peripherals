@@ -53,12 +53,13 @@ psa_status_t tp_trusted_delivery(void* data_out, tp_mac_t* mac_out);
 /*
 ** TRUSTED TRANSFORM
 */
-#define MAX_TRANSFORMS 4
+#define TP_MAX_TRANSFORMS 16
 typedef enum
 {
-    TRANSFORM_ID_INITIAL, /* signals initial data capture */
-    // TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT, // (celsius * 9/5) + 32;
+    TRANSFORM_ID_INITIAL,                       /* signals initial data capture */
+    TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT,       /* for handle version of trusted transformation */
     TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT, // (celsius * 9/5) + 32;
+    TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS, // (fahrenheit - 32) / 1.8;
     TRANSFORM_ID_CENSOR_FACES,
     TRANSFORM_ID_CROP_PHOTO,
     /* ... */
@@ -70,12 +71,23 @@ typedef struct
     transform_id type;
     union
     {
-        float parameter;
+        float convert_params[2];
     };
 } transform_t;
 
-psa_status_t tp_trusted_transform(sensor_data_t* data_io, transform_t* list_io,
-                                  tp_mac_t* mac_out, transform_t transform);
+typedef struct
+{
+    sensor_data_t data;
+    transform_t   list[TP_MAX_TRANSFORMS];
+    tp_mac_t      mac;
+} trusted_transform_t;
+
+psa_status_t tp_trusted_transform(trusted_transform_t* data_io, transform_t transform);
+//psa_status_t tp_trusted_transform(sensor_data_t* data_io, transform_t* list_io,
+//                                  tp_mac_t* mac_io, transform_t transform);
 
 /* TODO change to use handles */
 psa_status_t tp_encrypted_transform(void* data_io, tp_mac_t* mac_io, transform_t transform);
+
+
+psa_status_t tp_trusted_handle(void* data_io, tp_mac_t* mac_io, transform_t transform);

@@ -22,14 +22,15 @@
 
 // TODO uart transmission
 
-// call every tp function
-
 int main(void)
 {
     timing_init();
 
     tp_mac_t mac = {0};
     uint8_t ciphertext[ENCRYPTED_SENSOR_DATA_SIZE] = {0};
+    transform_t transforms[TP_MAX_TRANSFORMS] = {0};
+
+    trusted_transform_t tt = {0};
 
     psa_status_t ret = tp_init();
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
@@ -49,6 +50,17 @@ int main(void)
         ret = tp_trusted_delivery(ciphertext, &mac);
         if (ret != 0) { printk("Trusted Delivery failed with status: %i\n", ret); }
 
+        transform_t transform = {0};
+        ret = tp_trusted_transform(&tt, transform);
+        if (ret != 0) { printk("Trusted Transform init failed with status: %i\n", ret); }
+
+        /* perform example transformation */
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        transform.convert_params[0] = 1.8f;
+        transform.convert_params[1] = 32.f;
+        tp_trusted_transform(&tt, transform);
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_transform(&tt, transform);
 
         uint32_t tick_end  = GET_TICK();
         // TODO there is also timing_cycles_to_ns_avg()
@@ -60,8 +72,8 @@ int main(void)
         printk("(%" PRIu64 " cycles) ", cycles);
         printk("(%" PRIu64 " ns) ", nanosecs);
         printk("(%u ms) ", tick_end - tick_begin);
-        printk("Temp: %f ",  sensor_data.temp);
-        printk("Humidity: %f\n", sensor_data.humidity);
+        printk("Temp: %f ",  tt.data.temp);
+        printk("Humidity: %f\n", tt.data.humidity);
 
 
         printk("HASH: ");

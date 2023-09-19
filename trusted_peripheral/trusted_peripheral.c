@@ -3,6 +3,8 @@
 #include <psa/crypto.h>
 #include "../keys.h"
 
+#include <string.h> // for memcpy, memcmp
+
 #ifdef UNTRUSTED
     #include "trusted_peripheral.h"
 
@@ -19,7 +21,6 @@
 
     /* NOTE ours */
     #include <stdio.h> // TODO does this make tf-m include libc?
-    #include <string.h>
     #if !defined(EMULATED)
     #include "stm32hal.h"
     #include "stm32l5xx_hal_i2c.h" /* NOTE we pasted the files for I2C module ourselves
@@ -115,6 +116,8 @@ static psa_status_t internal_capture(sensor_data_t* sensor_data_out)
         change += 1;
     }
     #endif
+
+    return 0;
 }
 
 static psa_status_t internal_compute_mac(tp_mac_t* mac_out, sensor_data_t* sensor_data)
@@ -193,6 +196,91 @@ static psa_status_t internal_verify_mac(tp_mac_t* mac, sensor_data_t* sensor_dat
     {
         status = psa_verify_hash(key_rsa_sign, alg_sign, mac->hash, sizeof(mac->hash),
                                  mac->sign, sizeof(mac->sign));
+        if (status != PSA_SUCCESS) {
+            printf("Couldn't verify signature: %d\n", status);
+            return status;
+        }
+    }
+}
+
+static psa_status_t internal_compute_mac_tt(tp_mac_t* mac_out, trusted_transform_t* tt)
+{
+    psa_status_t status;
+
+    /* COMPUTE HASH (SHA256) */
+    {
+        size_t p_hash_length;
+        status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) tt,
+                                  sizeof(sensor_data_t) + (sizeof(transform_t) * TP_MAX_TRANSFORMS),
+                                  tt->mac.hash, MAC_HASH_SIZE, &p_hash_length);
+        if (p_hash_length != MAC_HASH_SIZE)
+        {
+            /* we expect the hash to fit perfectly */
+            printf("Hash length and size are different: %u %u\n", p_hash_length, sizeof(p_hash_length));
+            return -1;
+        }
+        if (status != PSA_SUCCESS)
+        {
+            printf("Failed to compute hash: %d\n", status);
+            return status;
+        }
+    }
+
+    /* SIGN HASH (RSA) */
+    {
+        size_t sig_len;
+        status = psa_sign_hash(key_rsa_sign, alg_sign, tt->mac.hash, sizeof(tt->mac.hash),
+                               tt->mac.sign, sizeof(tt->mac.sign), &sig_len);
+        if (status != PSA_SUCCESS)
+        {
+            printf("Failed to sign hash: %d\n", status);
+            return status;
+        }
+
+        if (sig_len != sizeof(tt->mac.sign))
+        {
+            /* we expect the signature to fit perfectly */
+            printf("Signature length and size are different: %u %u\n", sig_len, sizeof(tt->mac.sign));
+            return -1;
+        }
+    }
+}
+
+static psa_status_t internal_verify_mac_tt(tp_mac_t* mac, trusted_transform_t* tt)
+{
+    psa_status_t status;
+
+    /* VERIFY HASH */
+    {
+        size_t p_hash_length;
+        uint8_t test_hash[MAC_HASH_SIZE];
+
+        status = psa_hash_compute(PSA_ALG_SHA_256, (uint8_t*) tt,
+                                  sizeof(sensor_data_t) + (sizeof(transform_t) * TP_MAX_TRANSFORMS),
+                                  test_hash, MAC_HASH_SIZE, &p_hash_length);
+        if (p_hash_length != MAC_HASH_SIZE)
+        {
+            /* we expect the hash to fit perfectly */
+            printf("Hash length and size are different: %u %u\n", p_hash_length, sizeof(p_hash_length));
+            return -1;
+        }
+        if (status != PSA_SUCCESS)
+        {
+            printf("Failed to compute test hash: %d\n", status);
+            return status;
+        }
+
+        if (memcmp(test_hash, mac->hash, MAC_HASH_SIZE))
+        {
+            printf("Verifying hash failed: %d\n", status);
+            return status;
+        }
+    }
+
+    /* VERIFY SIGNATURE */
+    {
+        status = psa_verify_hash(key_rsa_sign, alg_sign, tt->mac.hash, sizeof(tt->mac.hash),
+                                 tt->mac.sign, sizeof(tt->mac.sign));
         if (status != PSA_SUCCESS) {
             printf("Couldn't verify signature: %d\n", status);
             return status;
@@ -457,11 +545,17 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_init)
 
 TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_out, tp_mac_t* mac_out)
 {
+    psa_status_t status;
     sensor_data_t sensor_data;
     tp_mac_t mac;
 
     /* get peripheral data */
-    internal_capture(&sensor_data);
+    status = internal_capture(&sensor_data);
+    if (status != PSA_SUCCESS)
+    {
+        printf("Couldn't capture sensor data\n");
+        return -1;
+    }
 
     /* update oled display */
     if (TP_USE_DISPLAY)
@@ -480,8 +574,6 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_
         #endif
     }
 
-    psa_status_t status;
-
     status = internal_compute_mac(&mac, &sensor_data);
     if (status != PSA_SUCCESS)
     {
@@ -493,15 +585,6 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_
     if (status != PSA_SUCCESS)
     {
         printf("Couldn't verify MAC\n");
-        return -1;
-    }
-
-    //uint8_t ciphertext[PSA_ASYMMETRIC_ENCRYPT_OUTPUT_SIZE(PSA_KEY_TYPE_RSA_KEY_PAIR, 1024, alg_encrypt)];
-    uint8_t ciphertext[ENCRYPTED_SENSOR_DATA_SIZE];
-    status = internal_encrypt(&sensor_data, ciphertext, sizeof(ciphertext));
-    if (status != PSA_SUCCESS)
-    {
-        printf("Couldn't encrypt sensor data\n");
         return -1;
     }
 
@@ -534,7 +617,12 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_delivery, void* data_out, tp_mac_t* 
     tp_mac_t mac;
 
     /* get peripheral data */
-    internal_capture(&sensor_data);
+    status = internal_capture(&sensor_data);
+    if (status != PSA_SUCCESS)
+    {
+        printf("Couldn't capture sensor data\n");
+        return -1;
+    }
 
     status = internal_compute_mac(&mac, &sensor_data);
     if (status != PSA_SUCCESS)
@@ -564,8 +652,120 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_delivery, void* data_out, tp_mac_t* 
         psa_write((psa_handle_t)handle, 0, ciphertext, ENCRYPTED_SENSOR_DATA_SIZE);
         psa_write((psa_handle_t)handle, 1, &mac,       sizeof(mac));
     #else
-        *sensor_data_out = sensor_data;
-        *mac_out         = mac;
+        memcpy(data_out, ciphertext, sizeof(ciphertext));
+        //*data_out = sensor_data;
+        *mac_out  = mac;
+    #endif
+    }
+
+    return status;
+}
+
+TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_transform, trusted_transform_t* tt_io, transform_t transform)
+{
+    psa_status_t status = 0;
+    trusted_transform_t tt;
+
+#ifdef TRUSTED
+    transform_t transform;
+    size_t ret = psa_read((psa_handle_t) handle, 1, &transform, sizeof(transform_t));
+    if (ret != sizeof(transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+    ret = psa_read((psa_handle_t) handle, 2, &tt, sizeof(trusted_transform_t));
+    if (ret != sizeof(trusted_transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+#endif
+
+    uint32_t list_index = 0;
+    if (transform.type != TRANSFORM_ID_INITIAL)
+    {
+        /* find last entry in list */
+        for (uint32_t i = 0; i < TP_MAX_TRANSFORMS; i++)
+        {
+            if (tt.list[0].type == TRANSFORM_ID_INITIAL)
+            {
+                list_index = i;
+                break;
+            }
+        }
+
+        if (list_index == TP_MAX_TRANSFORMS)
+        {
+            printf("Cannot perform transformation, list is full\n");
+            return -1;
+        }
+
+        status = internal_verify_mac_tt(&tt.mac, &tt);
+        if (status != PSA_SUCCESS)
+        {
+            printf("Couldn't verify MAC before transformation\n");
+            return -1;
+        }
+    }
+
+    switch (transform.type)
+    {
+        case TRANSFORM_ID_INITIAL:
+        {
+            /* empty the list */
+            memset(tt.list, 0, TP_MAX_TRANSFORMS);
+
+            /* get peripheral data */
+            status = internal_capture(&tt.data);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't capture sensor data for initial transform\n");
+                return -1;
+            }
+
+            status = internal_compute_mac_tt(&tt.mac, &tt);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC for initial transform\n");
+                return -1;
+            }
+        } break;
+
+        case TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT:
+        {
+            /* perform example transformation */
+            tt.data.temp =  (tt.data.temp * transform.convert_params[0]) + transform.convert_params[1];
+
+            /* append to list */
+            tt.list[list_index] = transform;
+
+            /* recompute mac */
+            status = internal_compute_mac_tt(&tt.mac, &tt);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC after transform\n");
+                return -1;
+            }
+        } break;
+
+        case TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS:
+        {
+            /* perform example transformation */
+            tt.data.temp = (tt.data.temp - transform.convert_params[1]) / transform.convert_params[0];
+
+            /* append to list */
+            tt.list[list_index] = transform;
+
+            /* recompute mac */
+            status = internal_compute_mac_tt(&tt.mac, &tt);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC after transform\n");
+                return -1;
+            }
+        } break;
+
+    }
+
+    /* WRITE TO OUTPUT PARAMS */
+    {
+    #ifdef TRUSTED
+        psa_write((psa_handle_t)handle, 0, &tt, sizeof(trusted_transform_t));
+    #else
+        *tt_io           = tt;
     #endif
     }
 
@@ -579,18 +779,6 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_delivery, void* data_out, tp_mac_t* 
 static psa_status_t tfm_trusted_peripheral_ipc(psa_msg_t *msg)
 {
     /* CHECK INPUT */
-    // NOTE our function only has output parameters right now
-#if 0
-    float* first_argument;
-    /* The size of the first argument is incorrect */
-    if (msg->out_size[0] != sizeof(first_argument)) { return PSA_ERROR_PROGRAMMER_ERROR; }
-
-    /* get & set value of first argument */
-    size_t ret = 0;
-    ret = psa_read(msg->handle, 0, &first_argument, msg->out_size[0]); /* should return number of bytes copied */
-    if (ret != msg->in_size[0]) { return PSA_ERROR_PROGRAMMER_ERROR; }
-#endif
-
     size_t ret = 0;
     uint32_t api_call = 0;
     ret = psa_read(msg->handle, 0, &api_call, msg->in_size[0]); /* should return number of bytes copied */
@@ -603,8 +791,13 @@ static psa_status_t tfm_trusted_peripheral_ipc(psa_msg_t *msg)
         return tfm_tp_trusted_capture(msg->handle);
     case TP_TRUSTED_DELIVERY:
         return tfm_tp_trusted_delivery(msg->handle);
-    //case TP_TRUSTED_TRANSFORM:
-    //    return tfm_tp_trusted_transform(msg->handle);
+    case TP_TRUSTED_TRANSFORM:
+    {
+        /* The size of arguments is incorrect */
+        if (msg->in_size[1] != sizeof(transform_t))         { return PSA_ERROR_PROGRAMMER_ERROR; }
+        if (msg->in_size[2] != sizeof(trusted_transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+        return tfm_tp_trusted_transform(msg->handle);
+    }
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
@@ -622,8 +815,13 @@ psa_status_t tfm_trusted_peripheral_sfn(const psa_msg_t *msg)
         return tfm_tp_trusted_capture(msg->handle);
     case TP_TRUSTED_DELIVERY:
         return tfm_tp_trusted_delivery(msg->handle);
-    //case TP_TRUSTED_TRANSFORM:
-    //    return tfm_tp_trusted_transform(msg->handle);
+    case TP_TRUSTED_TRANSFORM:
+    {
+        /* The size of arguments is incorrect */
+        if (msg->in_size[1] != sizeof(transform_t))         { return PSA_ERROR_PROGRAMMER_ERROR; }
+        if (msg->in_size[2] != sizeof(trusted_transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+        return tfm_tp_trusted_transform(msg->handle);
+    }
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
