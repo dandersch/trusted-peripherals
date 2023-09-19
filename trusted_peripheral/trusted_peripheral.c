@@ -56,7 +56,6 @@ static psa_key_id_t key_rsa_decrypt = 4;   // stored on server
 static psa_algorithm_t alg_sign    = PSA_ALG_RSA_PKCS1V15_SIGN(PSA_ALG_SHA_256);
 static psa_algorithm_t alg_encrypt = PSA_ALG_RSA_PKCS1V15_CRYPT;
 
-
 #ifdef UNTRUSTED
 #define TP_FUNC(name, ...) name(__VA_ARGS__)
 #define TP_INTERNAL
@@ -64,6 +63,9 @@ static psa_algorithm_t alg_encrypt = PSA_ALG_RSA_PKCS1V15_CRYPT;
 #define TP_FUNC(name, ...) tfm_##name(void* handle)
 #define TP_INTERNAL        static
 #endif
+
+/* TODO no system for more than one handle yet */
+static trusted_transform_t tt_internal = {0}; // for handle version
 
 /*
  * INTERNAL HELPER FUNCTIONS
@@ -294,7 +296,7 @@ static psa_status_t internal_encrypt(sensor_data_t* sensor_data, uint8_t* cipher
     size_t ciphertext_length;
 
     /* 1024 bit RSA only allows for the plaintext to be up to this large */
-    static const uint32_t max_plaintext_size = RSA_KEY_SIZE - 11; // 117 bytes
+    static const uint32_t max_plaintext_size = (RSA_KEY_SIZE/8) - 11; // 117 bytes
     if (sizeof(*sensor_data) > max_plaintext_size)
     {
         printf("Plaintext too large to encrypt: %u vs. %u\n", sizeof(*sensor_data), max_plaintext_size);
@@ -321,7 +323,7 @@ static psa_status_t internal_encrypt(sensor_data_t* sensor_data, uint8_t* cipher
     }
 }
 
-/* unused in real deployment */
+/* not in real deployment */
 static psa_status_t internal_decrypt(uint8_t* ciphertext, size_t ciphertext_length, sensor_data_t* sensor_data_out)
 {
     psa_status_t status;
@@ -340,6 +342,41 @@ static psa_status_t internal_decrypt(uint8_t* ciphertext, size_t ciphertext_leng
     {
         printf("Decryption resulted in differently sized plain text: %u vs. %u\n", output_length, sizeof(sensor_data_out));
         return -1;
+    }
+}
+
+static psa_status_t internal_encrypt_tt(trusted_transform_t* tt, uint8_t* ciphertext_out, size_t buffer_size)
+{
+    psa_status_t status;
+    size_t ciphertext_length;
+
+    size_t encryption_size = sizeof(sensor_data_t) + (sizeof(transform_t) * TP_MAX_TRANSFORMS);
+
+    /* 1024 bit RSA only allows for the plaintext to be up to this large */
+    static const uint32_t max_plaintext_size = (RSA_KEY_SIZE/8) - 11; // 117 bytes
+    if (encryption_size > max_plaintext_size)
+    {
+        printf("Plaintext too large to encrypt: %u vs. %u\n", encryption_size, max_plaintext_size);
+        return -1;
+    }
+
+    status = psa_asymmetric_encrypt(key_rsa_crypt, alg_encrypt,
+                                    (uint8_t*) tt, encryption_size,
+                                    NULL, 0, /* salt */
+                                    ciphertext_out, buffer_size,
+                                    &ciphertext_length);
+
+    /* we assume the ciphertext is always 128 bytes for now */
+    if (ciphertext_length > ENCRYPTED_SENSOR_DATA_SIZE)
+    {
+        printf("Ciphertext longer than expected: %u vs. %u\n", ciphertext_length, ENCRYPTED_SENSOR_DATA_SIZE);
+        return -1;
+    }
+
+    if (status != PSA_SUCCESS)
+    {
+        printf("Couldn't encrypt peripheral data: %d\n", status);
+        return status;
     }
 }
 
@@ -772,6 +809,132 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_transform, trusted_transform_t* tt_i
     return status;
 }
 
+TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_handle, tt_handle_cipher_t* hc_io, transform_t transform)
+{
+    psa_status_t status = 0;
+    tt_handle_cipher_t hc;
+
+#ifdef TRUSTED
+    transform_t transform;
+    size_t ret = psa_read((psa_handle_t) handle, 1, &transform, sizeof(transform_t));
+    if (ret != sizeof(transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+    ret = psa_read((psa_handle_t) handle, 2, &hc, sizeof(tt_handle_cipher_t));
+    if (ret != sizeof(tt_handle_cipher_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+#endif
+
+    /* TODO resolve handle / assign handle */
+    hc.handle = (void*) &tt_internal;
+
+    uint32_t list_index = 0;
+    if (transform.type != TRANSFORM_ID_INITIAL)
+    {
+        /* find last entry in list */
+        for (uint32_t i = 0; i < TP_MAX_TRANSFORMS; i++)
+        {
+            if (tt_internal.list[0].type == TRANSFORM_ID_INITIAL)
+            {
+                list_index = i;
+                break;
+            }
+        }
+
+        if (list_index == TP_MAX_TRANSFORMS && transform.type != TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT)
+        {
+            printf("Cannot perform transformation, list is full\n");
+            return -1;
+        }
+
+        status = internal_verify_mac_tt(&tt_internal.mac, &tt_internal);
+        if (status != PSA_SUCCESS)
+        {
+            printf("Couldn't verify MAC before transformation\n");
+            return -1;
+        }
+    }
+
+    switch (transform.type)
+    {
+        case TRANSFORM_ID_INITIAL:
+        {
+            /* empty the list */
+            memset(tt_internal.list, 0, TP_MAX_TRANSFORMS);
+
+            /* get peripheral data */
+            status = internal_capture(&tt_internal.data);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't capture sensor data for initial transform\n");
+                return -1;
+            }
+
+            status = internal_compute_mac_tt(&tt_internal.mac, &tt_internal);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC for initial transform\n");
+                return -1;
+            }
+        } break;
+
+        case TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT:
+        {
+            status = internal_encrypt_tt(&tt_internal, hc.ciphertext, ENCRYPTED_SENSOR_DATA_SIZE);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't encrypt resolved transform handle\n");
+                return -1;
+            }
+
+            hc.mac = tt_internal.mac;
+        } break;
+
+        case TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT:
+        {
+            /* perform example transformation */
+            tt_internal.data.temp =  (tt_internal.data.temp * transform.convert_params[0]) + transform.convert_params[1];
+
+            /* append to list */
+            tt_internal.list[list_index] = transform;
+
+            /* recompute mac */
+            status = internal_compute_mac_tt(&tt_internal.mac, &tt_internal);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC after transform\n");
+                return -1;
+            }
+        } break;
+
+        case TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS:
+        {
+            /* perform example transformation */
+            tt_internal.data.temp = (tt_internal.data.temp - transform.convert_params[1]) / transform.convert_params[0];
+
+            /* append to list */
+            tt_internal.list[list_index] = transform;
+
+            /* recompute mac */
+            status = internal_compute_mac_tt(&tt_internal.mac, &tt_internal);
+            if (status != PSA_SUCCESS)
+            {
+                printf("Couldn't compute MAC after transform\n");
+                return -1;
+            }
+        } break;
+
+    }
+
+    /* WRITE TO OUTPUT PARAMS */
+    {
+    #ifdef TRUSTED
+        psa_write((psa_handle_t)handle, 0, &hc, sizeof(tt_handle_cipher_t));
+    #else
+        *hc_io = hc;
+    #endif
+    }
+
+    return 0;
+}
+
 /*
 ** TP SERVICE SPECIFIC
 */
@@ -798,6 +961,13 @@ static psa_status_t tfm_trusted_peripheral_ipc(psa_msg_t *msg)
         if (msg->in_size[2] != sizeof(trusted_transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
         return tfm_tp_trusted_transform(msg->handle);
     }
+    case TP_TRUSTED_HANDLE:
+    {
+        /* The size of arguments is incorrect */
+        if (msg->in_size[1] != sizeof(transform_t))        { return PSA_ERROR_PROGRAMMER_ERROR; }
+        if (msg->in_size[2] != sizeof(tt_handle_cipher_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+        return tfm_tp_trusted_handle(msg->handle);
+    }
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
@@ -821,6 +991,13 @@ psa_status_t tfm_trusted_peripheral_sfn(const psa_msg_t *msg)
         if (msg->in_size[1] != sizeof(transform_t))         { return PSA_ERROR_PROGRAMMER_ERROR; }
         if (msg->in_size[2] != sizeof(trusted_transform_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
         return tfm_tp_trusted_transform(msg->handle);
+    }
+    case TP_TRUSTED_HANDLE:
+    {
+        /* The size of arguments is incorrect */
+        if (msg->in_size[1] != sizeof(transform_t))        { return PSA_ERROR_PROGRAMMER_ERROR; }
+        if (msg->in_size[2] != sizeof(tt_handle_cipher_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+        return tfm_tp_trusted_handle(msg->handle);
     }
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;

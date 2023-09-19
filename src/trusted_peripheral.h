@@ -15,13 +15,11 @@ typedef struct {
     uint8_t sign[MAC_SIGN_SIZE];
 } tp_mac_t;
 
-#define TP_API_INIT          32
-#define TP_SENSOR_DATA_GET   33
-
+#define TP_API_INIT           33
 #define TP_TRUSTED_DELIVERY   34
 #define TP_TRUSTED_CAPTURE    35
 #define TP_TRUSTED_TRANSFORM  36
-//#define TP_TRUSTED_TRANSFORM2 37
+#define TP_TRUSTED_HANDLE     37
 
 psa_status_t tp_init();
 
@@ -53,7 +51,7 @@ psa_status_t tp_trusted_delivery(void* data_out, tp_mac_t* mac_out);
 /*
 ** TRUSTED TRANSFORM
 */
-#define TP_MAX_TRANSFORMS 16
+#define TP_MAX_TRANSFORMS 4
 typedef enum
 {
     TRANSFORM_ID_INITIAL,                       /* signals initial data capture */
@@ -83,11 +81,22 @@ typedef struct
 } trusted_transform_t;
 
 psa_status_t tp_trusted_transform(trusted_transform_t* data_io, transform_t transform);
+
+/* non-IPC version: */
 //psa_status_t tp_trusted_transform(sensor_data_t* data_io, transform_t* list_io,
 //                                  tp_mac_t* mac_io, transform_t transform);
 
-/* TODO change to use handles */
-psa_status_t tp_encrypted_transform(void* data_io, tp_mac_t* mac_io, transform_t transform);
+/*
+** TRUSTED TRANSFORM VIA HANDLES
+*/
+typedef void* tt_handle_t;
+typedef struct
+{
+    tt_handle_t handle;
+    uint8_t     ciphertext[ENCRYPTED_SENSOR_DATA_SIZE];
+    tp_mac_t    mac;
+} tt_handle_cipher_t;
+psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform);
 
-
-psa_status_t tp_trusted_handle(void* data_io, tp_mac_t* mac_io, transform_t transform);
+/* non-IPC version: */
+// psa_status_t tp_trusted_handle(tt_handle_t handle_io, transform_t transform, uint8_t* ciphertext);

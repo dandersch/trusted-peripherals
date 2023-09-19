@@ -122,3 +122,32 @@ psa_status_t tp_trusted_transform(trusted_transform_t* data_io, transform_t tran
     status = psa_call(TFM_TRUSTED_PERIPHERAL_HANDLE, api_call, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
 #endif
 }
+
+psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform)
+{
+    psa_status_t status;
+    uint32_t api_call = TP_TRUSTED_HANDLE;
+
+    psa_outvec out_vec[] = {
+        { .base = hc,          .len = sizeof(tt_handle_cipher_t)     },
+    };
+
+    /* NOTE we encode our api call into the in_vec to be able to dispatch in the IPC case */
+    psa_invec  in_vec[]  = {
+        { .base = &api_call,  .len = sizeof(uint32_t)                },
+        { .base = &transform, .len = sizeof(transform_t)             },
+        { .base = hc,         .len = sizeof(tt_handle_cipher_t)      },
+    };
+
+#if defined(CONFIG_TFM_IPC)
+    psa_handle_t handle;
+    handle = psa_connect(TFM_TRUSTED_PERIPHERAL_SID, TFM_TRUSTED_PERIPHERAL_VERSION);
+    if (!PSA_HANDLE_IS_VALID(handle)) { return PSA_ERROR_GENERIC_ERROR; }
+
+    status = psa_call(handle, PSA_IPC_CALL, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+
+    psa_close(handle);
+#else
+    status = psa_call(TFM_TRUSTED_PERIPHERAL_HANDLE, api_call, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+#endif
+}

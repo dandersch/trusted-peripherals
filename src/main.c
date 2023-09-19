@@ -32,6 +32,8 @@ int main(void)
 
     trusted_transform_t tt = {0};
 
+    tt_handle_cipher_t hc = {0};
+
     psa_status_t ret = tp_init();
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
 
@@ -61,6 +63,21 @@ int main(void)
         tp_trusted_transform(&tt, transform);
         transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
         tp_trusted_transform(&tt, transform);
+
+        transform_t transform_2 = {0};
+        ret = tp_trusted_handle(&hc, transform_2);
+        if (ret != 0) { printk("Trusted Handle init failed with status: %i\n", ret); }
+        transform_2.type = TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT;
+        ret = tp_trusted_handle(&hc, transform_2);
+        if (ret != 0) { printk("Trusted Handle encryption failed with status: %i\n", ret); }
+
+        // printk("CIPHER: ");
+        // for (int i = 0; i < ENCRYPTED_SENSOR_DATA_SIZE; i++)
+        // {
+        //     printk("%02x", hc.ciphertext[i]);
+        // }
+        // printk("\n");
+
 
         uint32_t tick_end  = GET_TICK();
         // TODO there is also timing_cycles_to_ns_avg()
