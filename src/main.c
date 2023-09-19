@@ -21,9 +21,35 @@
 #include <zephyr/timing/timing.h> /* for profiling */
 
 // TODO uart transmission
+#include <zephyr/drivers/uart.h>  /* for transmission */
+#define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
+static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
 int main(void)
 {
+    if (!device_is_ready(uart_dev)) {
+        printk("UART device not found!");
+        return 0;
+    }
+
+    uint8_t rx_buf[10] = {0};
+    uart_rx_enable(uart_dev, rx_buf, 10, 50 * USEC_PER_MSEC);
+
+    char in;
+    int wait = -1;
+    printf("Waiting for python script to send data.\n");
+    while (wait == -1)
+    {
+        wait = uart_poll_in(uart_dev, &in);
+    }
+
+    uint8_t buf[4] = {'a', 'b', 'c', '\n'};
+    for (int i = 0; i < 4; i++) {
+        uart_poll_out(uart_dev, buf[i]);
+    }
+
+    return 0;
+
     timing_init();
 
     tp_mac_t mac = {0};
