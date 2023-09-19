@@ -12,7 +12,7 @@
   # TODO what are advantages/disadvantages to having multiple services vs. only one service that dispatches
   "services": [
     {
-      "name": "TFM_TP_SENSOR_DATA_GET",
+      "name": "TFM_TRUSTED_PERIPHERAL",
       "sid": "0xFFFFF001",
       "non_secure_clients": true,
       #"connection_based": true,   # requires TFM_CONNECTION_BASED_SERVICE_API to be enabled

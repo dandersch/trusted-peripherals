@@ -18,6 +18,11 @@ typedef struct {
 #define TP_API_INIT          32
 #define TP_SENSOR_DATA_GET   33
 
+#define TP_TRUSTED_DELIVERY   34
+#define TP_TRUSTED_CAPTURE    35
+#define TP_TRUSTED_TRANSFORM  36
+//#define TP_TRUSTED_TRANSFORM2 37
+
 psa_status_t tp_init();
 
 psa_status_t tp_sensor_data_get(float* temp, float* humidity, tp_mac_t* mac_out);
@@ -31,15 +36,16 @@ typedef struct
 {
     float temp;
     float humidity;
-} temp_data_t;
+} sensor_data_t;
 
-psa_status_t tp_trusted_capture(temp_data_t* data_out, tp_mac_t* mac_out);
+psa_status_t tp_trusted_capture(sensor_data_t* data_out, tp_mac_t* mac_out);
 
 /*
-** TRUSTED TRANSFORM
+** TRUSTED DELIVERY
 */
 
-#define TEMP_DATA_SIZE 8
+/* normal application doesn't know about sensor_data_t in case of trusted delivery */
+#define ENCRYPTED_SENSOR_DATA_SIZE 128
 
 psa_status_t tp_trusted_delivery(void* data_out, tp_mac_t* mac_out);
 
@@ -47,12 +53,11 @@ psa_status_t tp_trusted_delivery(void* data_out, tp_mac_t* mac_out);
 /*
 ** TRUSTED TRANSFORM
 */
-
 #define MAX_TRANSFORMS 4
-
 typedef enum
 {
     TRANSFORM_ID_INITIAL, /* signals initial data capture */
+    // TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT, // (celsius * 9/5) + 32;
     TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT, // (celsius * 9/5) + 32;
     TRANSFORM_ID_CENSOR_FACES,
     TRANSFORM_ID_CROP_PHOTO,
@@ -69,7 +74,7 @@ typedef struct
     };
 } transform_t;
 
-psa_status_t tp_trusted_transform(temp_data_t* data_io, transform_t* list_io,
+psa_status_t tp_trusted_transform(sensor_data_t* data_io, transform_t* list_io,
                                   tp_mac_t* mac_out, transform_t transform);
 
 /* TODO change to use handles */
