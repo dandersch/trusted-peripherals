@@ -1,0 +1,42 @@
+./build_trusted:
+        120.09s user 19.01s system 432% cpu 32.156 total
+        118.28s user 17.58s system 486% cpu 27.936 total
+        117.89s user 17.49s system 488% cpu 27.690 total
+                                            29.261 avg
+
+./build_untrusted:
+         37.54s user 7.00s system 336% cpu  13.218 total
+         36.36s user 6.84s system 340% cpu  12.697 total
+         36.42s user 6.89s system 337% cpu  12.828 total
+                                            12.914 avg
+
+./flash_trusted:
+          0.66s user 0.44s system 15% cpu 7.119 total
+          0.65s user 0.43s system 15% cpu 7.081 total
+          0.63s user 0.49s system 15% cpu 7.107 total
+                                          7.102 avg
+
+./flash_untrusted:
+          0.41s user 0.23s system 23% cpu 2.705 total
+          0.43s user 0.21s system 23% cpu 2.705 total
+          0.44s user 0.20s system 23% cpu 2.705 total
+                                          2.705 avg
+
+boot untrusted using k_uptime_get():
+          *** Booting Zephyr OS build zephyr-v3.4.0-3202-gb38e1cd62a63 ***
+          (8ms since boot)
+          
+          *** Booting Zephyr OS build zephyr-v3.4.0-3202-gb38e1cd62a63 ***
+          (8ms since boot)
+          
+          *** Booting Zephyr OS build zephyr-v3.4.0-3202-gb38e1cd62a63 ***
+          (8ms since boot)
+          
+          8ms avg
+
+boot trusted using stopwatch (k_uptime_get() gives wrong measurement):
+          2.62s
+          2.71s
+          2.70s
+          2.68s avg
+
