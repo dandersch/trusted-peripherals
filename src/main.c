@@ -13,7 +13,8 @@
 #include "trusted_peripheral.h"
 
 #ifdef EMULATED
-    #define GET_TICK() sys_clock_elapsed()
+    //#define GET_TICK() sys_clock_elapsed()
+    #define GET_TICK() k_uptime_ticks()
 #else
     #define GET_TICK() HAL_GetTick()
 #endif
@@ -25,8 +26,79 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE  1
+#define TEST_TRANSMISSION_TRUSTED_CAPTURE 0
+
+#if TEST_TRANSMISSION_TRUSTED_CAPTURE
+#define SENSOR_READINGS 100
+struct packet_t {
+    tp_mac_t       mac [SENSOR_READINGS];
+    sensor_data_t  data[SENSOR_READINGS];
+} packet;
+#endif
+
 int main(void)
 {
+    psa_status_t ret = tp_init();
+    if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
+
+#if TEST_PERFORMANCE_TRUSTED_CAPTURE
+    tp_mac_t      mac  = {0};
+    sensor_data_t data = {0};
+
+    printk("PROFILING TC START\n");
+
+    timing_start();
+    for (int i = 0; i < 1000; i++)
+    {
+        uint64_t tick_begin = GET_TICK(); /* NOTE tick increments for every ms. */
+        timing_t cycle_begin = timing_counter_get();
+
+        /* use our trusted peripheral api */
+        psa_status_t ret = tp_trusted_capture(&data, &mac);
+        if (ret != 0) { printk("Trusted Capture failed with status: %i\n", ret); }
+
+        uint64_t tick_end  = GET_TICK();
+        timing_t cycle_end = timing_counter_get();
+        uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
+        uint64_t nanosecs  = timing_cycles_to_ns(cycles);
+
+        //printk("(%" PRIu64 "", cycles);
+        printk("%" PRIu64 "\n", nanosecs);
+        printk("%" PRIu64 " ticks\n", tick_end - tick_begin);
+        //printk("%u ms\n", tick_end - tick_begin);
+    }
+    timing_stop();
+
+    return 0;
+#endif
+
+#if TEST_TRANSMISSION_TRUSTED_CAPTURE
+
+    printk("MEASURING TRANSMISSION %u TC START\n", SENSOR_READINGS);
+    uint32_t tick_begin = GET_TICK();
+
+    timing_start();
+    for (int i = 0; i < SENSOR_READINGS; i++)
+    {
+        /* use our trusted peripheral api */
+        psa_status_t ret = tp_trusted_capture(&packet.data[i], &packet.mac[i]);
+        if (ret != 0) { printk("Trusted Capture failed with status: %i\n", ret); }
+    }
+
+    /* transmit */
+    for (int i = 0; i < sizeof(packet); i++) {
+        uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+    }
+
+    uint32_t tick_end  = GET_TICK();
+    printk("\n");
+    printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
+
+    return 0;
+#endif
+
+#if 0
     if (!device_is_ready(uart_dev)) {
         printk("UART device not found!");
         return 0;
@@ -138,6 +210,7 @@ int main(void)
         #endif
 
     }
+#endif
 
     return 0;
 }
