@@ -42,6 +42,11 @@ int main(void)
     psa_status_t ret = tp_init();
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
 
+    /* blink red led to signal start */
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    HAL_Delay(100);
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+
 #if TEST_PERFORMANCE_TRUSTED_CAPTURE
     tp_mac_t      mac  = {0};
     sensor_data_t data = {0};
@@ -70,8 +75,12 @@ int main(void)
     }
     timing_stop();
 
+    /* toggle red led on to signal we are finished */
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+
     return 0;
 #endif
+
 
 #if TEST_TRANSMISSION_TRUSTED_CAPTURE
 
