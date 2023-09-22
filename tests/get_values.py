@@ -1,22 +1,30 @@
 #!/usr/bin/python
 import numpy as np
 
-# Read values from the file into a list
-files = [
+
+# as microseconds
+files1 = [
           # context switch performance
           "perf_cs_trustedsfn_in_ns.txt",
-          #"perf_cs_trustedipc_in_ns.txt",
+          "perf_cs_trustedipc_in_ns.txt",
           "perf_cs_untrusted_in_ns.txt",
           "perf_cs_emulated_in_ns.txt",
           "perf_cs_emulatedsfn_in_ns.txt",
-          #"perf_cs_emulatedipc_in_ns.txt",
+          "perf_cs_emulatedipc_in_ns.txt",
+         ]
 
-          #"perf_untrusted_tc_in_ns.txt",
-          #"perf_trustedsfn_tc_in_ns.txt",
-        ]
+# as milliseconds
+files2 = [
+          "perf_tc_untrusted_in_ns.txt",
+          "perf_tc_trustedsfn_in_ns.txt",
+          "perf_tc_trustedipc_in_ns.txt",
+          "perf_tc_emulated_in_ns.txt",
+          "perf_tc_emulatedsfn_in_ns.txt",
+          "perf_tc_emulatedipc_in_ns.txt",
+         ]
 
 
-for f in files:
+for f in files1:
     values = []
     with open(f, "r") as file:
     
@@ -31,4 +39,21 @@ for f in files:
         print(f"For file: {f}")
         print(f"    Average: {average_ns * 10**-3} µs")
         print(f"    Std.dev: {std_dev_ns * 10**-3} µs")
+        print(f"")
+
+for f in files2:
+    values = []
+    with open(f, "r") as file:
+    
+        for line in file:
+            value = float(line.strip())
+            values.append(value)
+    
+        average_ns = np.mean(values)
+        std_dev_ns = np.std(values)
+    
+        # Print the results
+        print(f"For file: {f}")
+        print(f"    Average: {average_ns * 10**-3 * 10**-3} ms")
+        print(f"    Std.dev: {std_dev_ns * 10**-3 * 10**-3} ms")
         print(f"")
