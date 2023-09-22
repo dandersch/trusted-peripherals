@@ -44,9 +44,11 @@ int main(void)
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
 
     /* blink red led to signal start */
+    #if !defined(EMULATED)
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
     HAL_Delay(100);
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    #endif
 
 #if TEST_PERFORMANCE_TRUSTED_CAPTURE
     tp_mac_t      mac  = {0};
@@ -80,7 +82,9 @@ int main(void)
     timing_stop();
 
     /* toggle red led on to signal we are finished */
+    #if !defined(EMULATED)
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    #endif
 
     return 0;
 #endif

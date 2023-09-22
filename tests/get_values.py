@@ -3,6 +3,14 @@ import numpy as np
 
 # Read values from the file into a list
 files = [
+          # context switch performance
+          "perf_cs_trustedsfn_in_ns.txt",
+          "perf_cs_trustedipc_in_ns.txt",
+          "perf_cs_untrusted_in_ns.txt",
+          "perf_cs_emulated_in_ns.txt",
+          "perf_cs_emulatedsfn_in_ns.txt",
+          "perf_cs_emulatedipc_in_ns.txt",
+
           "perf_untrusted_tc_in_ns.txt",
           "perf_trustedsfn_tc_in_ns.txt",
         ]

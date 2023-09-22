@@ -1064,8 +1064,7 @@ static void tp_signal_handle(psa_signal_t signal, tp_func_t pfn)
     }
 }
 
-/* TODO this does not get set w/ IPC mode */
-#ifdef CONFIG_TFM_IPC
+#ifdef CONFIG_TFM_IPC /* this does not get set for trusted world */
 psa_status_t tfm_tp_req_mngr_init(void)
 {
     psa_signal_t signals = 0;
@@ -1073,7 +1072,7 @@ psa_status_t tfm_tp_req_mngr_init(void)
     while (1) {
         signals = psa_wait(PSA_WAIT_ANY, PSA_BLOCK);
 
-        if (signals & TFM_TP_SENSOR_DATA_GET_SIGNAL) {
+        if (signals & TFM_TRUSTED_PERIPHERAL_SIGNAL) {
             tp_signal_handle(TFM_TRUSTED_PERIPHERAL_SIGNAL, tfm_trusted_peripheral_ipc);
         }
 
