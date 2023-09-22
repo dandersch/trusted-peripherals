@@ -86,24 +86,19 @@ int main(void)
 #endif
 
 #if TEST_PERFORMANCE_CONTEXT_SWITCH
-    for (int i = 0; i < 10; i++)
+    /* calulcate fibonacci numbers from 0 to 40 a hundred times */
+    for(int x = 0; x < 100; x++) for (int i = 0; i < 40; i++)
     {
-        uint32_t untrust_start = GET_TICK(); /* NOTE tick increments for every ms. */
-
         timing_t cycle_begin = timing_counter_get();
 
-        uint32_t trusted_start, trusted_end;
-        measure_context_switch(&trusted_start, &trusted_end);
+        uint32_t fib = 0;
+        measure_context_switch(&fib, i);
 
         timing_t cycle_end = timing_counter_get();
         uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
         uint64_t nanosecs  = timing_cycles_to_ns(cycles);
 
-        uint32_t untrust_end   = GET_TICK();
-
-        printf("Time to enter secure world:  %u ms\n", trusted_start - untrust_start);
-        printf("Time to return to untrusted: %u ms\n", untrust_end   - trusted_end);
-        printf("Time for whole function:     %u ms\n", untrust_end   - untrust_start);
+        //printk("fibonacci of 40: %u\n", fib);
         printk("%" PRIu64 " ns\n", nanosecs);
     }
 

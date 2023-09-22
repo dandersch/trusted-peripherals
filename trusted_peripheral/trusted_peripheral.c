@@ -123,17 +123,17 @@ static psa_status_t internal_capture(sensor_data_t* sensor_data_out)
 }
 
 /* get nth fibonacci number to measure performance */
-static int compute_something(int n)
+static uint32_t compute_something(int n)
 {
     if (n <= 1) {
         return n;
     }
 
-    int prev = 0;
-    int current = 1;
-    int next;
+    uint32_t prev = 0;
+    uint32_t current = 1;
+    uint32_t next;
 
-    for (int i = 2; i <= n; i++) {
+    for (uint32_t i = 2; i <= n; i++) {
         next = prev + current;
         prev = current;
         current = next;
@@ -950,21 +950,19 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_handle, tt_handle_cipher_t* hc_io, t
 }
 
 /* to measure context switch */
-TP_INTERNAL psa_status_t TP_FUNC(measure_context_switch, uint32_t* trusted_start, uint32_t* trusted_end)
+TP_INTERNAL psa_status_t TP_FUNC(measure_context_switch, uint32_t* fib_out, uint32_t number)
 {
-    /* ... */
-    uint32_t start = HAL_GetTick();
-
-    printf("30th: %u\n", compute_something(30));
-
-    uint32_t end = HAL_GetTick();
-
     #ifdef TRUSTED
-        psa_write((psa_handle_t)handle, 0, &start, sizeof(uint32_t));
-        psa_write((psa_handle_t)handle, 1, &end,   sizeof(uint32_t));
+        uint32_t number;
+        size_t ret = psa_read((psa_handle_t) handle, 1, &number, sizeof(uint32_t));
+        if (ret != sizeof(number)) { return PSA_ERROR_PROGRAMMER_ERROR; }
+
+        uint32_t fib = compute_something(number);
+
+        psa_write((psa_handle_t)handle, 0, &fib, sizeof(uint32_t));
     #else
-        *trusted_start = start;
-        *trusted_end   = end;
+         uint32_t fib = compute_something(number);
+        *fib_out = fib;
     #endif
 
     return 0;

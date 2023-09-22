@@ -104,4 +104,4 @@ psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform);
 
 
 /* measure context switch performance, not part of TP api */
-psa_status_t measure_context_switch(uint32_t* trusted_start, uint32_t* trusted_end);
+psa_status_t measure_context_switch(uint32_t* fib_out, uint32_t number);
