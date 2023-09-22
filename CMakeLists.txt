@@ -45,6 +45,7 @@ else()
     set_property(TARGET zephyr_property_target
                  APPEND PROPERTY TFM_CMAKE_OPTIONS
                  -DTFM_S_REG_TEST=ON
+                 #-DCRYPTO_HW_ACCELERATOR=OFF # doesn't work
     )
 
     target_sources(app PRIVATE

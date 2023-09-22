@@ -1,55 +1,39 @@
 #!/usr/bin/python
-import serial
-import time
 
-# Define the serial port and baud rate
-ser = serial.Serial('/dev/ttyACM0', baudrate=9600)
+# TODO see how many bytes are between two markers in a file
+# TODO read out two values at first marker and second marker
+# TODO compute bytes per second
 
-# Open the serial port
-#ser.open()
-
-# Initialize variables
-start_time = time.time()
+# Initialize variables to store byte count and time in milliseconds
 byte_count = 0
+time_ms = 0
 
-exit()
+files = [ 
+         "transmission_tc_trusted_in_ms_10_readings.txt" 
+         ]
 
-try:
-    while True:
-        # Read data from the serial port
-        data = ser.read(1)  # Read one byte (adjust as needed)
+# Open the text file for reading
+with open(files[0], 'rb') as file:
+    lines = file.readlines()
 
-        print(data, end="")
+    # Iterate through each line in the file
+    for line in lines[1:-1]:
+        # Increment the byte count by the length of the line
+        byte_count += len(line)
 
-        # Check for the magic number "EXEC" to start measuring
-        if data == b'C':
-            magic_number = ser.read(1)  # Read the remaining "XEC"
-            if magic_number == b'I':
-                start_time = time.time()  # Start measuring
-                print("Magic number received. Measurement started.")
+    # get transmission tiem from the last line
+    last_line = lines[-1].decode('utf-8')
+    if 'MEASURING END WITH:' in last_line:
+        # Extract the time value from the line using string manipulation
+        time_ms = int(last_line.split()[-2])
 
-        # Check for the end of transmission or other conditions to stop
-        if not data:
-            break
-
-        # Update byte count
-        byte_count += len(data)
-
-    # Calculate elapsed time
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-
-    # Calculate transmission rate in bytes per second (Bps)
-    transmission_rate_bps = byte_count / elapsed_time
-
-    # Print the results
-    print(f"Total Bytes Received: {byte_count} bytes")
-    print(f"Elapsed Time: {elapsed_time} seconds")
-    print(f"Transmission Rate: {transmission_rate_bps:.2f} Bps")
-
-except KeyboardInterrupt:
-    print("Measurement interrupted.")
-
-finally:
-    # Close the serial port
-    ser.close()
+# compute bytes per second
+if time_ms > 0:
+    bps = byte_count / (time_ms / 1000)
+    print(f'For {files[0]}:')
+    print(f'Bytes sent:       {byte_count}')
+    print(f'Time to send:     {time_ms}')
+    print(f'Bytes per second: {bps} Bytes/sec')
+    print("")
+else:
+    print("Couldn't parse out time in ms.")

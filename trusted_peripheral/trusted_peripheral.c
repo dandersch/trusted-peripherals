@@ -122,6 +122,24 @@ static psa_status_t internal_capture(sensor_data_t* sensor_data_out)
     return 0;
 }
 
+/* for measuring performance */
+static uint64_t compute_something(int n)
+{
+    uint64_t a = 0, b = 1, temp;
+    if (n == 0) return a;
+    for (int i = 2; i <= n; ++i) {
+        temp = a + b;
+        a = b;
+        b = temp;
+    }
+    return b;
+    // float result = 0;
+    // for (int i = 0; i < 100; i++) {
+    //     result += 2.f * foo + 4.f / 2.f;
+    // }
+    // return result;
+}
+
 static psa_status_t internal_compute_mac(tp_mac_t* mac_out, sensor_data_t* sensor_data)
 {
     psa_status_t status;
@@ -618,19 +636,11 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_
         return -1;
     }
 
-    /* TODO only here for testing reasons, remove */
-    status = internal_verify_mac(&mac, &sensor_data);
-    if (status != PSA_SUCCESS)
-    {
-        printf("Couldn't verify MAC\n");
-        return -1;
-    }
-
-//    size_t ciphertext_length = ENCRYPTED_SENSOR_DATA_SIZE; // NOTE assumption
-//    status = internal_decrypt(ciphertext, ciphertext_length, &sensor_data);
+//    /* TODO only here for testing reasons, remove */
+//    status = internal_verify_mac(&mac, &sensor_data);
 //    if (status != PSA_SUCCESS)
 //    {
-//        printf("Couldn't decrypt sensor data\n");
+//        printf("Couldn't verify MAC\n");
 //        return -1;
 //    }
 
@@ -644,6 +654,7 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_
         *mac_out         = mac;
     #endif
     }
+
 
     return status;
 }

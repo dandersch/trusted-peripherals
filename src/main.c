@@ -69,9 +69,12 @@ int main(void)
         uint64_t nanosecs  = timing_cycles_to_ns(cycles);
 
         //printk("(%" PRIu64 "", cycles);
-        printk("%" PRIu64 "\n", nanosecs);
-        printk("%" PRIu64 " ticks\n", tick_end - tick_begin);
+        printk("%" PRIu64 " ns\n", nanosecs);
+        printk("%" PRIu64 " ms\n", tick_end - tick_begin);
         //printk("%u ms\n", tick_end - tick_begin);
+
+        //printk("Temp: %f ",  data.temp);
+        //printk("Humidity: %f\n", data.humidity);
     }
     timing_stop();
 
