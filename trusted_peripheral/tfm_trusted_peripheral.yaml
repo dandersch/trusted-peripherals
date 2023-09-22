@@ -30,6 +30,24 @@
     # },
   ],
 
+  # Peripheral memory-mapped I/O regions and interrupts.
+  "mmio_regions": [
+    {
+      "name": "TFM_PERIPHERAL_TIMER0",
+      "permission": "READ-WRITE"
+    },
+    {
+      "name": "TFM_PERIPHERAL_I2C2",
+      "permission": "READ-WRITE"
+    }
+  ],
+  #"irqs": [
+  #  {
+  #    "source": "TFM_A_IRQ",
+  #    "name": "A_IRQ",
+  #    "handling": "SLIH"
+  #  }
+  #],
   "dependencies": [
     "TFM_CRYPTO",
     #"TFM_PROTECTED_STORAGE_SERVICE",

@@ -26,22 +26,42 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-#define TEST_PERFORMANCE_TRUSTED_CAPTURE    0
-#define TEST_PERFORMANCE_TRUSTED_DELIVERY   0
-#define TEST_PERFORMANCE_TRUSTED_TRANSFORM  1
-#define TEST_PERFORMANCE_CONTEXT_SWITCH     0
-#define TEST_TRANSMISSION_TRUSTED_CAPTURE   0
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE      1
+#define TEST_PERFORMANCE_TRUSTED_DELIVERY     0
+#define TEST_PERFORMANCE_TRUSTED_TRANSFORM    0
+#define TEST_PERFORMANCE_CONTEXT_SWITCH       0
 
-#if TEST_TRANSMISSION_TRUSTED_CAPTURE
+#define TEST_TRANSMISSION_TRUSTED_CAPTURE     0
+#define TEST_TRANSMISSION_TRUSTED_DELIVERY    0
+#define TEST_TRANSMISSION_TRUSTED_TRANSFORM   0
+
 #define SENSOR_READINGS 100
+
+// TODO we can move these
+#if TEST_TRANSMISSION_TRUSTED_CAPTURE
 struct packet_t {
-    tp_mac_t       mac [SENSOR_READINGS];
-    sensor_data_t  data[SENSOR_READINGS];
+    tp_mac_t       mac;
+    sensor_data_t  data;
+} packet;
+#endif
+#if TEST_TRANSMISSION_TRUSTED_DELIVERY
+struct packet_t {
+    uint8_t   ciphertext[ENCRYPTED_SENSOR_DATA_SIZE];
+    tp_mac_t  mac;
+} packet;
+#endif
+#if TEST_TRANSMISSION_TRUSTED_TRANSFORM
+struct packet_t {
+    trusted_transform_t tt;
 } packet;
 #endif
 
+
+
 int main(void)
 {
+
+    timing_init();
     psa_status_t ret = tp_init();
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
 
@@ -59,7 +79,7 @@ int main(void)
     printk("PROFILING TC START\n");
 
     timing_start();
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         uint64_t tick_begin = GET_TICK(); /* NOTE tick increments for every ms. */
         timing_t cycle_begin = timing_counter_get();
@@ -190,23 +210,19 @@ int main(void)
 
 
 #if TEST_TRANSMISSION_TRUSTED_CAPTURE
-
     printk("MEASURING TRANSMISSION %u TC START\n", SENSOR_READINGS);
     uint32_t tick_begin = GET_TICK();
-
-    timing_start();
     for (int i = 0; i < SENSOR_READINGS; i++)
     {
         /* use our trusted peripheral api */
-        psa_status_t ret = tp_trusted_capture(&packet.data[i], &packet.mac[i]);
+        psa_status_t ret = tp_trusted_capture(&packet.data, &packet.mac);
         if (ret != 0) { printk("Trusted Capture failed with status: %i\n", ret); }
-    }
 
-    /* transmit */
-    for (int i = 0; i < sizeof(packet); i++) {
-        uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+        /* transmit TODO rewrite */
+        for (int i = 0; i < sizeof(packet); i++) {
+            uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+        }
     }
-
     uint32_t tick_end  = GET_TICK();
     printk("\n");
     printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
@@ -214,38 +230,72 @@ int main(void)
     return 0;
 #endif
 
-#if 0
-    if (!device_is_ready(uart_dev)) {
-        printk("UART device not found!");
-        return 0;
-    }
-
-    uint8_t rx_buf[10] = {0};
-    uart_rx_enable(uart_dev, rx_buf, 10, 50 * USEC_PER_MSEC);
-
-    char in;
-    int wait = -1;
-    printf("Waiting for python script to send data.\n");
-    while (wait == -1)
+#if TEST_TRANSMISSION_TRUSTED_DELIVERY
+    printk("MEASURING TRANSMISSION %u TD START\n", SENSOR_READINGS);
+    uint32_t tick_begin = GET_TICK();
+    for (int i = 0; i < SENSOR_READINGS; i++)
     {
-        wait = uart_poll_in(uart_dev, &in);
-    }
+        /* use our trusted peripheral api */
+        psa_status_t ret = tp_trusted_delivery(&packet.ciphertext, &packet.mac);
+        if (ret != 0) { printk("Trusted Capture failed with status: %i\n", ret); }
 
-    uint8_t buf[4] = {'a', 'b', 'c', '\n'};
-    for (int i = 0; i < 4; i++) {
-        uart_poll_out(uart_dev, buf[i]);
+        /* transmit TODO rewrite */
+        for (int i = 0; i < sizeof(packet); i++) {
+            uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+        }
     }
+    uint32_t tick_end  = GET_TICK();
+    printk("\n");
+    printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
 
     return 0;
+#endif
 
+#if TEST_TRANSMISSION_TRUSTED_TRANSFORM
+    printk("MEASURING TRANSMISSION %u TD START\n", SENSOR_READINGS);
+    uint32_t tick_begin = GET_TICK();
+    for (int i = 0; i < SENSOR_READINGS; i++)
+    {
+        transform_t transform = {0};
+        psa_status_t ret = tp_trusted_transform(&packet.tt, transform);
+        if (ret != 0) { printk("Trusted Transform init failed with status: %i\n", ret); }
+
+        /* perform example transformation */
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        transform.convert_params[0] = 1.8f;
+        transform.convert_params[1] = 32.f;
+        tp_trusted_transform(&packet.tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_transform(&packet.tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_transform(&packet.tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_transform(&packet.tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_transform(&packet.tt, transform);
+
+        /* transmit TODO rewrite */
+        for (int i = 0; i < sizeof(packet); i++) {
+            uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+        }
+    }
+    uint32_t tick_end  = GET_TICK();
+    printk("\n");
+    printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
+#endif
+
+
+#if 0 // Tests all API calls
     timing_init();
 
     tp_mac_t mac = {0};
     uint8_t ciphertext[ENCRYPTED_SENSOR_DATA_SIZE] = {0};
     transform_t transforms[TP_MAX_TRANSFORMS] = {0};
-
     trusted_transform_t tt = {0};
-
     tt_handle_cipher_t hc = {0};
 
     psa_status_t ret = tp_init();
@@ -253,7 +303,6 @@ int main(void)
 
     for (;;)
     {
-        /* TODO try timing_ */
         timing_start();
         uint32_t tick_begin = GET_TICK(); /* NOTE tick increments for every ms. */
         timing_t cycle_begin = timing_counter_get();
@@ -292,10 +341,8 @@ int main(void)
         // }
         // printk("\n");
 
-
         uint32_t tick_end  = GET_TICK();
-        // TODO there is also timing_cycles_to_ns_avg()
-        timing_t cycle_end = timing_counter_get();
+        timing_t cycle_end = timing_counter_get(); // there is also timing_cycles_to_ns_avg()
         uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
         uint64_t nanosecs  = timing_cycles_to_ns(cycles);
         timing_stop();
@@ -324,7 +371,6 @@ int main(void)
         #ifdef EMULATED
         //k_sleep(K_MSEC(10000000)); // emulated mps2_an521 is too fast
         #endif
-
     }
 #endif
 
