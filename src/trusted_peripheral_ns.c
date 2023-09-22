@@ -151,3 +151,31 @@ psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform)
     status = psa_call(TFM_TRUSTED_PERIPHERAL_HANDLE, api_call, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
 #endif
 }
+
+
+/* measures context switch performance, not part of TP api */
+psa_status_t measure_context_switch(uint32_t* trusted_start, uint32_t* trusted_end)
+{
+    psa_status_t status;
+    uint32_t api_call = MEASURE_PERFORMANCE;
+
+    psa_outvec out_vec[] = {
+        { .base = trusted_start, .len = sizeof(uint32_t) },
+        { .base = trusted_end,   .len = sizeof(uint32_t) },
+    };
+
+    /* NOTE we encode our api call into the in_vec to be able to dispatch in the IPC case */
+    psa_invec  in_vec[]  = { { .base = &api_call, .len = sizeof(uint32_t) } };
+
+#if defined(CONFIG_TFM_IPC)
+    psa_handle_t handle;
+    handle = psa_connect(TFM_TRUSTED_PERIPHERAL_SID, TFM_TRUSTED_PERIPHERAL_VERSION);
+    if (!PSA_HANDLE_IS_VALID(handle)) { return PSA_ERROR_GENERIC_ERROR; }
+
+    status = psa_call(handle, PSA_IPC_CALL, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+
+    psa_close(handle);
+#else
+    status = psa_call(TFM_TRUSTED_PERIPHERAL_HANDLE, api_call, in_vec, IOVEC_LEN(in_vec), out_vec, IOVEC_LEN(out_vec));
+#endif
+}

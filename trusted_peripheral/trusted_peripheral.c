@@ -122,22 +122,24 @@ static psa_status_t internal_capture(sensor_data_t* sensor_data_out)
     return 0;
 }
 
-/* for measuring performance */
-static uint64_t compute_something(int n)
+/* get nth fibonacci number to measure performance */
+static int compute_something(int n)
 {
-    uint64_t a = 0, b = 1, temp;
-    if (n == 0) return a;
-    for (int i = 2; i <= n; ++i) {
-        temp = a + b;
-        a = b;
-        b = temp;
+    if (n <= 1) {
+        return n;
     }
-    return b;
-    // float result = 0;
-    // for (int i = 0; i < 100; i++) {
-    //     result += 2.f * foo + 4.f / 2.f;
-    // }
-    // return result;
+
+    int prev = 0;
+    int current = 1;
+    int next;
+
+    for (int i = 2; i <= n; i++) {
+        next = prev + current;
+        prev = current;
+        current = next;
+    }
+
+    return current;
 }
 
 static psa_status_t internal_compute_mac(tp_mac_t* mac_out, sensor_data_t* sensor_data)
@@ -947,6 +949,27 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_handle, tt_handle_cipher_t* hc_io, t
     return 0;
 }
 
+/* to measure context switch */
+TP_INTERNAL psa_status_t TP_FUNC(measure_context_switch, uint32_t* trusted_start, uint32_t* trusted_end)
+{
+    /* ... */
+    uint32_t start = HAL_GetTick();
+
+    printf("30th: %u\n", compute_something(30));
+
+    uint32_t end = HAL_GetTick();
+
+    #ifdef TRUSTED
+        psa_write((psa_handle_t)handle, 0, &start, sizeof(uint32_t));
+        psa_write((psa_handle_t)handle, 1, &end,   sizeof(uint32_t));
+    #else
+        *trusted_start = start;
+        *trusted_end   = end;
+    #endif
+
+    return 0;
+}
+
 /*
 ** TP SERVICE SPECIFIC
 */
@@ -980,6 +1003,7 @@ static psa_status_t tfm_trusted_peripheral_ipc(psa_msg_t *msg)
         if (msg->in_size[2] != sizeof(tt_handle_cipher_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
         return tfm_tp_trusted_handle(msg->handle);
     }
+    case MEASURE_PERFORMANCE: return tfm_measure_context_switch(msg->handle);
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }
@@ -1011,6 +1035,7 @@ psa_status_t tfm_trusted_peripheral_sfn(const psa_msg_t *msg)
         if (msg->in_size[2] != sizeof(tt_handle_cipher_t)) { return PSA_ERROR_PROGRAMMER_ERROR; }
         return tfm_tp_trusted_handle(msg->handle);
     }
+    case MEASURE_PERFORMANCE: return tfm_measure_context_switch(msg->handle);
     default:
         return PSA_ERROR_PROGRAMMER_ERROR;
     }

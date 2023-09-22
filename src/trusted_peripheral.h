@@ -20,6 +20,7 @@ typedef struct {
 #define TP_TRUSTED_CAPTURE    35
 #define TP_TRUSTED_TRANSFORM  36
 #define TP_TRUSTED_HANDLE     37
+#define MEASURE_PERFORMANCE   38/* not part of TPI api */
 
 psa_status_t tp_init();
 
@@ -100,3 +101,7 @@ psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform);
 
 /* non-IPC version: */
 // psa_status_t tp_trusted_handle(tt_handle_t handle_io, transform_t transform, uint8_t* ciphertext);
+
+
+/* measure context switch performance, not part of TP api */
+psa_status_t measure_context_switch(uint32_t* trusted_start, uint32_t* trusted_end);
