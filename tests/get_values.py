@@ -26,10 +26,18 @@ files2 = [
           # trusted delivery
           "perf_td_untrusted_in_ns.txt",
           "perf_td_trustedsfn_in_ns.txt",
-          #"perf_td_trustedipc_in_ns.txt",
+          "perf_td_trustedipc_in_ns.txt",
           "perf_td_emulated_in_ns.txt",
           "perf_td_emulatedsfn_in_ns.txt",
-          #"perf_td_emulatedipc_in_ns.txt",
+          "perf_td_emulatedipc_in_ns.txt",
+
+          # trusted transformation
+          "perf_tt_untrusted_in_ns.txt",
+          "perf_tt_trustedsfn_in_ns.txt",
+          "perf_tt_trustedipc_in_ns.txt",
+          "perf_tt_emulated_in_ns.txt",
+          "perf_tt_emulatedsfn_in_ns.txt",
+          "perf_tt_emulatedipc_in_ns.txt",
          ]
 
 

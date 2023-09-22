@@ -31,9 +31,9 @@ with open(files[0], 'rb') as file:
 if time_ms > 0:
     bps = byte_count / (time_ms / 1000)
     print(f'For {files[0]}:')
-    print(f'Bytes sent:       {byte_count}')
-    print(f'Time to send:     {time_ms}')
-    print(f'Bytes per second: {bps} Bytes/sec')
+    print(f'    Bytes sent:       {byte_count}')
+    print(f'    Time to send:     {time_ms}')
+    print(f'    Bytes per second: {bps}')
     print("")
 else:
     print("Couldn't parse out time in ms.")
