@@ -26,10 +26,11 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-#define TEST_PERFORMANCE_TRUSTED_CAPTURE   0
-#define TEST_PERFORMANCE_TRUSTED_DELIVERY  1
-#define TEST_TRANSMISSION_TRUSTED_CAPTURE  0
-#define TEST_PERFORMANCE_CONTEXT_SWITCH    0
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE    0
+#define TEST_PERFORMANCE_TRUSTED_DELIVERY   0
+#define TEST_PERFORMANCE_TRUSTED_TRANSFORM  1
+#define TEST_PERFORMANCE_CONTEXT_SWITCH     0
+#define TEST_TRANSMISSION_TRUSTED_CAPTURE   0
 
 #if TEST_TRANSMISSION_TRUSTED_CAPTURE
 #define SENSOR_READINGS 100
@@ -117,6 +118,55 @@ int main(void)
     #endif
 
     return 0;
+#endif
+
+#if TEST_PERFORMANCE_TRUSTED_TRANSFORM
+
+    trusted_transform_t tt = {0};
+
+    printk("PROFILING TT START\n");
+
+    timing_start();
+    for (int i = 0; i < 100; i++)
+    {
+        timing_t cycle_begin = timing_counter_get();
+
+        transform_t transform = {0};
+        psa_status_t ret = tp_trusted_transform(&tt, transform);
+        if (ret != 0) { printk("Trusted Transform init failed with status: %i\n", ret); }
+
+        /* perform example transformation */
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        transform.convert_params[0] = 1.8f;
+        transform.convert_params[1] = 32.f;
+        tp_trusted_transform(&tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_transform(&tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_transform(&tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_transform(&tt, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_transform(&tt, transform);
+
+        timing_t cycle_end = timing_counter_get();
+        uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
+        uint64_t nanosecs  = timing_cycles_to_ns(cycles);
+
+        printk("%" PRIu64 "\n", nanosecs);
+    }
+    timing_stop();
+
+    #if !defined(EMULATED)
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    #endif
+
+    return 0;
+
 #endif
 
 #if TEST_PERFORMANCE_CONTEXT_SWITCH

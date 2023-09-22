@@ -52,7 +52,7 @@ psa_status_t tp_trusted_delivery(void* data_out, tp_mac_t* mac_out);
 /*
 ** TRUSTED TRANSFORM
 */
-#define TP_MAX_TRANSFORMS 4
+#define TP_MAX_TRANSFORMS 6
 typedef enum
 {
     TRANSFORM_ID_INITIAL,                       /* signals initial data capture */
