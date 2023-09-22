@@ -122,24 +122,14 @@ static psa_status_t internal_capture(sensor_data_t* sensor_data_out)
     return 0;
 }
 
-/* get nth fibonacci number to measure performance */
-static uint32_t compute_something(int n)
+/* to measure performance */
+static uint64_t compute_large_value(int value)
 {
-    if (n <= 1) {
-        return n;
+    uint64_t result = 0;
+    for (int i = 0; i < 100; i++) {
+        result = result + (i * value) / 2;
     }
-
-    uint32_t prev = 0;
-    uint32_t current = 1;
-    uint32_t next;
-
-    for (uint32_t i = 2; i <= n; i++) {
-        next = prev + current;
-        prev = current;
-        current = next;
-    }
-
-    return current;
+    return result;
 }
 
 static psa_status_t internal_compute_mac(tp_mac_t* mac_out, sensor_data_t* sensor_data)
@@ -950,19 +940,18 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_handle, tt_handle_cipher_t* hc_io, t
 }
 
 /* to measure context switch */
-TP_INTERNAL psa_status_t TP_FUNC(measure_context_switch, uint32_t* fib_out, uint32_t number)
+TP_INTERNAL psa_status_t TP_FUNC(measure_context_switch, uint64_t* res_out, uint32_t number)
 {
     #ifdef TRUSTED
         uint32_t number;
         size_t ret = psa_read((psa_handle_t) handle, 1, &number, sizeof(uint32_t));
         if (ret != sizeof(number)) { return PSA_ERROR_PROGRAMMER_ERROR; }
 
-        uint32_t fib = compute_something(number);
+        uint64_t res = compute_large_value(number);
 
-        psa_write((psa_handle_t)handle, 0, &fib, sizeof(uint32_t));
+        psa_write((psa_handle_t)handle, 0, &res, sizeof(uint32_t));
     #else
-         uint32_t fib = compute_something(number);
-        *fib_out = fib;
+        *res_out = compute_large_value(number);
     #endif
 
     return 0;

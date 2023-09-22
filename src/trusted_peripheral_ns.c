@@ -154,13 +154,13 @@ psa_status_t tp_trusted_handle(tt_handle_cipher_t* hc, transform_t transform)
 
 
 /* measures context switch performance, not part of TP api */
-psa_status_t measure_context_switch(uint32_t* fib_out, uint32_t number)
+psa_status_t measure_context_switch(uint64_t* res_out, uint32_t number)
 {
     psa_status_t status;
     uint32_t api_call = MEASURE_PERFORMANCE;
 
     psa_outvec out_vec[] = {
-        { .base = fib_out, .len = sizeof(uint32_t) },
+        { .base = res_out, .len = sizeof(uint64_t) },
     };
 
     /* NOTE we encode our api call into the in_vec to be able to dispatch in the IPC case */

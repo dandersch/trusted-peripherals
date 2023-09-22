@@ -91,19 +91,19 @@ int main(void)
 
 #if TEST_PERFORMANCE_CONTEXT_SWITCH
     /* calulcate fibonacci numbers from 0 to 40 a hundred times */
-    for(int x = 0; x < 100; x++) for (int i = 0; i < 40; i++)
+    for (int i = 0; i < 10000; i++)
     {
         timing_t cycle_begin = timing_counter_get();
 
-        uint32_t fib = 0;
-        measure_context_switch(&fib, i);
+        uint64_t result = 0;
+        measure_context_switch(&result, i);
 
         timing_t cycle_end = timing_counter_get();
         uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
         uint64_t nanosecs  = timing_cycles_to_ns(cycles);
 
-        //printk("fibonacci of 40: %u\n", fib);
-        printk("%" PRIu64 " ns\n", nanosecs);
+        //printk("result: %" PRIu64 "\n", result);
+        printk("%" PRIu64 "\n",      nanosecs);
     }
 
 #endif
