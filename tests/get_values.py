@@ -15,12 +15,21 @@ files1 = [
 
 # as milliseconds
 files2 = [
+          # trusted capture
           "perf_tc_untrusted_in_ns.txt",
           "perf_tc_trustedsfn_in_ns.txt",
           "perf_tc_trustedipc_in_ns.txt",
           "perf_tc_emulated_in_ns.txt",
           "perf_tc_emulatedsfn_in_ns.txt",
           "perf_tc_emulatedipc_in_ns.txt",
+
+          # trusted delivery
+          "perf_td_untrusted_in_ns.txt",
+          "perf_td_trustedsfn_in_ns.txt",
+          #"perf_td_trustedipc_in_ns.txt",
+          "perf_td_emulated_in_ns.txt",
+          "perf_td_emulatedsfn_in_ns.txt",
+          #"perf_td_emulatedipc_in_ns.txt",
          ]
 
 

@@ -26,9 +26,10 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-#define TEST_PERFORMANCE_TRUSTED_CAPTURE  1
-#define TEST_TRANSMISSION_TRUSTED_CAPTURE 0
-#define TEST_PERFORMANCE_CONTEXT_SWITCH   0
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE   0
+#define TEST_PERFORMANCE_TRUSTED_DELIVERY  1
+#define TEST_TRANSMISSION_TRUSTED_CAPTURE  0
+#define TEST_PERFORMANCE_CONTEXT_SWITCH    0
 
 #if TEST_TRANSMISSION_TRUSTED_CAPTURE
 #define SENSOR_READINGS 100
@@ -82,6 +83,35 @@ int main(void)
     timing_stop();
 
     /* toggle red led on to signal we are finished */
+    #if !defined(EMULATED)
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    #endif
+
+    return 0;
+#endif
+
+#if TEST_PERFORMANCE_TRUSTED_DELIVERY
+    uint8_t   ciphertext[ENCRYPTED_SENSOR_DATA_SIZE] = {0};
+    tp_mac_t  mac                                    = {0};
+
+    printk("PROFILING TD START\n");
+
+    timing_start();
+    for (int i = 0; i < 1000; i++)
+    {
+        timing_t cycle_begin = timing_counter_get();
+
+        psa_status_t ret = tp_trusted_delivery(ciphertext, &mac);
+        if (ret != 0) { printk("Trusted Capture failed with status: %i\n", ret); }
+
+        timing_t cycle_end = timing_counter_get();
+        uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
+        uint64_t nanosecs  = timing_cycles_to_ns(cycles);
+
+        printk("%" PRIu64 "\n", nanosecs);
+    }
+    timing_stop();
+
     #if !defined(EMULATED)
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
     #endif
