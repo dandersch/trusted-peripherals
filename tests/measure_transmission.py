@@ -30,6 +30,14 @@ files = [
          "trans_tt_trusted_in_ms_1.txt",
          "trans_tt_trusted_in_ms_10.txt",
          "trans_tt_trusted_in_ms_100.txt",
+
+         # Trusted Handle
+         "trans_th_untrusted_in_ms_1.txt",
+         "trans_th_untrusted_in_ms_10.txt",
+         "trans_th_untrusted_in_ms_100.txt",
+         "trans_th_trusted_in_ms_1.txt",
+         "trans_th_trusted_in_ms_10.txt",
+         "trans_th_trusted_in_ms_100.txt",
          ]
 
 # Open the text file for reading
