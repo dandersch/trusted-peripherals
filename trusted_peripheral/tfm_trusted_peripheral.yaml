@@ -31,16 +31,17 @@
   ],
 
   # Peripheral memory-mapped I/O regions and interrupts.
-  "mmio_regions": [
-    {
-      "name": "TFM_PERIPHERAL_TIMER0",
-      "permission": "READ-WRITE"
-    },
-    {
-      "name": "TFM_PERIPHERAL_I2C2",
-      "permission": "READ-WRITE"
-    }
-  ],
+  # NOTE: platform-specific, not compatible with emulated target
+  #"mmio_regions": [
+  #  {
+  #    "name": "TFM_PERIPHERAL_TIMER0",
+  #    "permission": "READ-WRITE"
+  #  },
+  #  {
+  #    "name": "TFM_PERIPHERAL_I2C2",
+  #    "permission": "READ-WRITE"
+  #  }
+  #],
   #"irqs": [
   #  {
   #    "source": "TFM_A_IRQ",

@@ -38,6 +38,14 @@ files2 = [
           "perf_tt_emulated_in_ns.txt",
           "perf_tt_emulatedsfn_in_ns.txt",
           "perf_tt_emulatedipc_in_ns.txt",
+
+          # trusted transformation
+          "perf_th_untrusted_in_ns.txt",
+          "perf_th_trustedsfn_in_ns.txt",
+          #"perf_th_trustedipc_in_ns.txt",
+          "perf_th_emulated_in_ns.txt",
+          "perf_th_emulatedsfn_in_ns.txt",
+          #"perf_th_emulatedipc_in_ns.txt",
          ]
 
 

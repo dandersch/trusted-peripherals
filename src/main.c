@@ -26,16 +26,18 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-#define TEST_PERFORMANCE_TRUSTED_CAPTURE      1
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE      0
 #define TEST_PERFORMANCE_TRUSTED_DELIVERY     0
 #define TEST_PERFORMANCE_TRUSTED_TRANSFORM    0
+#define TEST_PERFORMANCE_TRUSTED_HANDLE       1
 #define TEST_PERFORMANCE_CONTEXT_SWITCH       0
 
 #define TEST_TRANSMISSION_TRUSTED_CAPTURE     0
 #define TEST_TRANSMISSION_TRUSTED_DELIVERY    0
 #define TEST_TRANSMISSION_TRUSTED_TRANSFORM   0
+#define TEST_TRANSMISSION_TRUSTED_HANDLE      0
 
-#define SENSOR_READINGS 100
+#define SENSOR_READINGS 10
 
 // TODO we can move these
 #if TEST_TRANSMISSION_TRUSTED_CAPTURE
@@ -55,12 +57,14 @@ struct packet_t {
     trusted_transform_t tt;
 } packet;
 #endif
-
-
+#if TEST_TRANSMISSION_TRUSTED_HANDLE
+struct packet_t {
+    tt_handle_cipher_t hc;
+} packet;
+#endif
 
 int main(void)
 {
-
     timing_init();
     psa_status_t ret = tp_init();
     if (ret != 0) { printk("Initializing TP service failed with status: %i\n", ret); }
@@ -189,6 +193,56 @@ int main(void)
 
 #endif
 
+#if TEST_PERFORMANCE_TRUSTED_HANDLE
+    printk("PROFILING TH START\n");
+
+    tt_handle_cipher_t hc = {0};
+
+    timing_start();
+    for (int i = 0; i < 100; i++)
+    {
+        timing_t cycle_begin = timing_counter_get();
+
+        transform_t transform = {0};
+        psa_status_t ret = tp_trusted_handle(&hc, transform);
+        if (ret != 0) { printk("Trusted Handle init failed with status: %i\n", ret); }
+
+        /* perform example transformation */
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        transform.convert_params[0] = 1.8f;
+        transform.convert_params[1] = 32.f;
+        tp_trusted_handle(&hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_handle(&hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_handle(&hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_handle(&hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_handle(&hc, transform);
+
+        transform.type = TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT,
+        tp_trusted_handle(&hc, transform);
+
+        timing_t cycle_end = timing_counter_get();
+        uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
+        uint64_t nanosecs  = timing_cycles_to_ns(cycles);
+
+        printk("%" PRIu64 "\n", nanosecs);
+    }
+    timing_stop();
+
+    #if !defined(EMULATED)
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+    #endif
+
+    return 0;
+#endif
+
 #if TEST_PERFORMANCE_CONTEXT_SWITCH
     /* calulcate fibonacci numbers from 0 to 40 a hundred times */
     for (int i = 0; i < 100; i++)
@@ -252,7 +306,7 @@ int main(void)
 #endif
 
 #if TEST_TRANSMISSION_TRUSTED_TRANSFORM
-    printk("MEASURING TRANSMISSION %u TD START\n", SENSOR_READINGS);
+    printk("MEASURING TRANSMISSION %u TT START\n", SENSOR_READINGS);
     uint32_t tick_begin = GET_TICK();
     for (int i = 0; i < SENSOR_READINGS; i++)
     {
@@ -278,7 +332,7 @@ int main(void)
         transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
         tp_trusted_transform(&packet.tt, transform);
 
-        /* transmit TODO rewrite */
+        /* transmit */
         for (int i = 0; i < sizeof(packet); i++) {
             uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
         }
@@ -288,6 +342,45 @@ int main(void)
     printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
 #endif
 
+#if TEST_TRANSMISSION_TRUSTED_HANDLE
+    printk("MEASURING TRANSMISSION %u TH START\n", SENSOR_READINGS);
+    uint32_t tick_begin = GET_TICK();
+    for (int i = 0; i < SENSOR_READINGS; i++)
+    {
+        transform_t transform = {0};
+        psa_status_t ret = tp_trusted_handle(&packet.hc, transform);
+        if (ret != 0) { printk("Trusted Handle init failed with status: %i\n", ret); }
+
+        /* perform example transformation */
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        transform.convert_params[0] = 1.8f;
+        transform.convert_params[1] = 32.f;
+        tp_trusted_handle(&packet.hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_handle(&packet.hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_handle(&packet.hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_FAHRENHEIT_TO_CELCIUS;
+        tp_trusted_handle(&packet.hc, transform);
+
+        transform.type = TRANSFORM_ID_CONVERT_CELCIUS_TO_FAHRENHEIT;
+        tp_trusted_handle(&packet.hc, transform);
+
+        transform.type = TRANSFORM_RESOLVE_HANDLE_AND_ENCRYPT,
+        tp_trusted_handle(&packet.hc, transform);
+
+        /* transmit */
+        for (int i = 0; i < sizeof(packet); i++) {
+            uart_poll_out(uart_dev, ((uint8_t*) &packet)[i]);
+        }
+    }
+    uint32_t tick_end  = GET_TICK();
+    printk("\n");
+    printk("MEASURING END WITH: %u ms\n", tick_end - tick_begin);
+#endif
 
 #if 0 // Tests all API calls
     timing_init();
