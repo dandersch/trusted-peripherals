@@ -26,10 +26,10 @@
 #define UART_DEVICE_NODE DT_CHOSEN(zephyr_shell_uart)
 static const struct device *const uart_dev = DEVICE_DT_GET(UART_DEVICE_NODE);
 
-#define TEST_PERFORMANCE_TRUSTED_CAPTURE      0
+#define TEST_PERFORMANCE_TRUSTED_CAPTURE      1
 #define TEST_PERFORMANCE_TRUSTED_DELIVERY     0
 #define TEST_PERFORMANCE_TRUSTED_TRANSFORM    0
-#define TEST_PERFORMANCE_TRUSTED_HANDLE       1
+#define TEST_PERFORMANCE_TRUSTED_HANDLE       0
 #define TEST_PERFORMANCE_CONTEXT_SWITCH       0
 
 #define TEST_TRANSMISSION_TRUSTED_CAPTURE     0
@@ -244,8 +244,8 @@ int main(void)
 #endif
 
 #if TEST_PERFORMANCE_CONTEXT_SWITCH
-    /* calulcate fibonacci numbers from 0 to 40 a hundred times */
-    for (int i = 0; i < 100; i++)
+    /* calculate some value ten thousand times */
+    for (int i = 0; i < 10000; i++)
     {
         timing_t cycle_begin = timing_counter_get();
 
@@ -256,7 +256,6 @@ int main(void)
         uint64_t cycles    = timing_cycles_get(&cycle_begin, &cycle_end);
         uint64_t nanosecs  = timing_cycles_to_ns(cycles);
 
-        //printk("result: %" PRIu64 "\n", result);
         printk("%" PRIu64 "\n",      nanosecs);
     }
 
