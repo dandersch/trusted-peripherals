@@ -1,15 +1,14 @@
-Things you will need to build, flash & run these applications (only tested on linux):
+* Trusted Peripherals in TrustZone-M
+Things you will need to build, flash & run these applications:
 - The Zephyr SDK (7+ GB), the Zephyr repo (3 GB) along with their metabuild
-  tool ~west~. You can follow Zephyr's
-  [[https://docs.zephyrproject.org/latest/develop/getting_started/index.html][Getting
-  started guide]].
+  tool ~west~. You can follow Zephyr's [[https://docs.zephyrproject.org/latest/develop/getting_started/index.html][Getting started guide]].
+
+To flash it onto a NUCLEO-L552ZE-Q (or other hardware):
 - The [[https://github.com/stlink-org/stlink][ST-Link driver]]
 - OpenOCD or PyOCD for flashing
 - An ARM compiler such as gcc-arm-none-eabi
-- For TrustZone support: The
-  [[https://www.st.com/en/development-tools/stm32cubeprog.html][STM32CubeProgrammer]]
-  to set option bytes. ~STM32CubeProgrammer~ needs to be in the path and java
-  needs to be installed.
+- For TrustZone support: The [[https://www.st.com/en/development-tools/stm32cubeprog.html][STM32CubeProgrammer]] to set option bytes.
+  ~STM32CubeProgrammer~ needs to be in the path and java needs to be installed.
 - Optionally for the emulated target: QEMU supporting ARM architectures
 
 Folder structure:
@@ -43,9 +42,15 @@ For the trusted build:
 - This is a proof-of-work of the trusted peripherals API.
 - The secure side contains all peripheral code using the STM32 HAL. Most of the
   STM32 HAL is included inside tf-m, except some of the I2C (and SPI) code -
-  that needs to be included by hand into the TF-M module.
+  that needs to be included by hand into the TF-M module (see patch below).
 - We are forcing the test flash memory layout memory from TF_M to get more
   flash memory for our ns app (from 32kb to 172kb).
+
+TF-M patch:
+- The project required source code and build system changes to TF-M
+- The patch ~tf-m_8b6146261.patch~ contains all changes
+- The patch needs to be applied to the TF-M module inside Zephyr on commit
+  ~8b6146261fe2c0ad61154e20c7e338601eae2208~
 
 Scripts:
 - ~build_emulated.sh~  : Builds the trusted/untrusted setup for emulated target
@@ -65,3 +70,4 @@ Folders:
 - ~tests~ : All our measurements and python scripts to get the mean & std.dev
 - ~trusted_peripheral~ : Source code, build scripts and yaml files for our
   trusted application (i.e., trusted peripherals secure service)
+

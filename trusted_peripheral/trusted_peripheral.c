@@ -628,14 +628,6 @@ TP_INTERNAL psa_status_t TP_FUNC(tp_trusted_capture, sensor_data_t* sensor_data_
         return -1;
     }
 
-//    /* TODO only here for testing reasons, remove */
-//    status = internal_verify_mac(&mac, &sensor_data);
-//    if (status != PSA_SUCCESS)
-//    {
-//        printf("Couldn't verify MAC\n");
-//        return -1;
-//    }
-
     /* WRITE TO OUTPUT PARAMS */
     {
     #ifdef TRUSTED
